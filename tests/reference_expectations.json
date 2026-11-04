@@ -1,0 +1,14 @@
+{
+  "wr90": {
+    "s11_max_db": -30.0,
+    "s21_min_db": -0.5,
+    "s21_max_db": 0.5,
+    "reciprocity_max_db_difference": 0.1
+  },
+  "patch_antenna": {
+    "s11_min_db": -10.0,
+    "far_field_peak_min_dbi": 0.0,
+    "far_field_peak_max_dbi": 15.0,
+    "minimum_near_field_samples": 100
+  }
+}
