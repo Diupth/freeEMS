@@ -214,37 +214,6 @@ void writeSimulation(QXmlStreamWriter& writer,
     writeNumber(writer, QStringLiteral("port-impedance-ohm"),
                 settings.portImpedanceOhm);
     writer.writeAttribute(QStringLiteral("engine"), settings.engine);
-    writer.writeAttribute(QStringLiteral("waveguide-mode"), settings.waveguideMode);
-    writeNumber(writer, QStringLiteral("waveguide-frequency-start-ghz"),
-                settings.waveguideFrequencyStartGHz);
-    writeNumber(writer, QStringLiteral("waveguide-frequency-stop-ghz"),
-                settings.waveguideFrequencyStopGHz);
-    writeNumber(writer, QStringLiteral("waveguide-width-mm"),
-                settings.waveguideWidthMm);
-    writeNumber(writer, QStringLiteral("waveguide-height-mm"),
-                settings.waveguideHeightMm);
-    writeNumber(writer, QStringLiteral("waveguide-length-mm"),
-                settings.waveguideLengthMm);
-    writeNumber(writer, QStringLiteral("waveguide-port-depth-mm"),
-                settings.waveguidePortDepthMm);
-    writeNumber(writer, QStringLiteral("antenna-substrate-width-mm"),
-                settings.antennaSubstrateWidthMm);
-    writeNumber(writer, QStringLiteral("antenna-substrate-length-mm"),
-                settings.antennaSubstrateLengthMm);
-    writeNumber(writer, QStringLiteral("antenna-substrate-thickness-mm"),
-                settings.antennaSubstrateThicknessMm);
-    writeNumber(writer, QStringLiteral("antenna-patch-width-mm"),
-                settings.antennaPatchWidthMm);
-    writeNumber(writer, QStringLiteral("antenna-patch-length-mm"),
-                settings.antennaPatchLengthMm);
-    writeNumber(writer, QStringLiteral("antenna-feed-position-mm"),
-                settings.antennaFeedPositionMm);
-    writeNumber(writer, QStringLiteral("antenna-relative-permittivity"),
-                settings.antennaRelativePermittivity);
-    writeNumber(writer, QStringLiteral("antenna-conductivity-s-per-m"),
-                settings.antennaConductivitySPerM);
-    writeNumber(writer, QStringLiteral("antenna-loss-tangent"),
-                settings.antennaLossTangent);
     writer.writeEndElement();
 }
 
@@ -477,38 +446,6 @@ void parseSimulation(QXmlStreamReader& reader,
     settings->portImpedanceOhm =
         numberAttribute(attributes, QStringLiteral("port-impedance-ohm"));
     settings->engine = requiredAttribute(attributes, QStringLiteral("engine"));
-    settings->waveguideMode =
-        requiredAttribute(attributes, QStringLiteral("waveguide-mode"));
-    settings->waveguideFrequencyStartGHz =
-        numberAttribute(attributes, QStringLiteral("waveguide-frequency-start-ghz"));
-    settings->waveguideFrequencyStopGHz =
-        numberAttribute(attributes, QStringLiteral("waveguide-frequency-stop-ghz"));
-    settings->waveguideWidthMm =
-        numberAttribute(attributes, QStringLiteral("waveguide-width-mm"));
-    settings->waveguideHeightMm =
-        numberAttribute(attributes, QStringLiteral("waveguide-height-mm"));
-    settings->waveguideLengthMm =
-        numberAttribute(attributes, QStringLiteral("waveguide-length-mm"));
-    settings->waveguidePortDepthMm =
-        numberAttribute(attributes, QStringLiteral("waveguide-port-depth-mm"));
-    settings->antennaSubstrateWidthMm =
-        numberAttribute(attributes, QStringLiteral("antenna-substrate-width-mm"));
-    settings->antennaSubstrateLengthMm =
-        numberAttribute(attributes, QStringLiteral("antenna-substrate-length-mm"));
-    settings->antennaSubstrateThicknessMm =
-        numberAttribute(attributes, QStringLiteral("antenna-substrate-thickness-mm"));
-    settings->antennaPatchWidthMm =
-        numberAttribute(attributes, QStringLiteral("antenna-patch-width-mm"));
-    settings->antennaPatchLengthMm =
-        numberAttribute(attributes, QStringLiteral("antenna-patch-length-mm"));
-    settings->antennaFeedPositionMm =
-        numberAttribute(attributes, QStringLiteral("antenna-feed-position-mm"));
-    settings->antennaRelativePermittivity =
-        numberAttribute(attributes, QStringLiteral("antenna-relative-permittivity"));
-    settings->antennaConductivitySPerM =
-        numberAttribute(attributes, QStringLiteral("antenna-conductivity-s-per-m"));
-    settings->antennaLossTangent =
-        numberAttribute(attributes, QStringLiteral("antenna-loss-tangent"));
     reader.skipCurrentElement();
 }
 
@@ -719,38 +656,6 @@ void applyEvaluatedParameters(OemProjectDocument* project) {
                 }
             }
 
-            if (feature.outputId == QStringLiteral("model-waveguide")) {
-                if (argument.name == QStringLiteral("width-a"))
-                    project->simulation.waveguideWidthMm = value;
-                else if (argument.name == QStringLiteral("height-b"))
-                    project->simulation.waveguideHeightMm = value;
-                else if (argument.name == QStringLiteral("length"))
-                    project->simulation.waveguideLengthMm = value;
-                else if (argument.name == QStringLiteral("port-depth"))
-                    project->simulation.waveguidePortDepthMm = value;
-            } else if (feature.outputId ==
-                       QStringLiteral("model-antenna-substrate")) {
-                if (argument.name == QStringLiteral("width"))
-                    project->simulation.antennaSubstrateWidthMm = value;
-                else if (argument.name == QStringLiteral("length"))
-                    project->simulation.antennaSubstrateLengthMm = value;
-                else if (argument.name == QStringLiteral("thickness"))
-                    project->simulation.antennaSubstrateThicknessMm = value;
-                else if (argument.name == QStringLiteral("relative-permittivity"))
-                    project->simulation.antennaRelativePermittivity = value;
-                else if (argument.name == QStringLiteral("conductivity"))
-                    project->simulation.antennaConductivitySPerM = value;
-                else if (argument.name == QStringLiteral("loss-tangent"))
-                    project->simulation.antennaLossTangent = value;
-            } else if (feature.outputId ==
-                       QStringLiteral("model-antenna-patch")) {
-                if (argument.name == QStringLiteral("width"))
-                    project->simulation.antennaPatchWidthMm = value;
-                else if (argument.name == QStringLiteral("length"))
-                    project->simulation.antennaPatchLengthMm = value;
-                else if (argument.name == QStringLiteral("feed-position"))
-                    project->simulation.antennaFeedPositionMm = value;
-            }
             if (!feature.materialRef.isEmpty()) {
                 auto material = std::find_if(
                     project->materials.begin(), project->materials.end(),
@@ -831,11 +736,8 @@ void parseSolverFiles(QXmlStreamReader& reader, OemProjectDocument* project,
 void parseResults(QXmlStreamReader& reader, OemProjectDocument* project,
                   const QString& packageRoot) {
     project->resultKind = requiredAttribute(reader.attributes(), QStringLiteral("kind"));
-    if (project->resultKind != QStringLiteral("none") &&
-        project->resultKind != QStringLiteral("cad") &&
-        project->resultKind != QStringLiteral("waveguide") &&
-        project->resultKind != QStringLiteral("antenna")) {
-        invalid(QStringLiteral("Unknown project result kind: %1").arg(project->resultKind));
+    if (project->resultKind.isEmpty()) {
+        invalid(QStringLiteral("Project result kind cannot be empty."));
     }
     while (reader.readNextStartElement()) {
         if (reader.name() != QStringLiteral("file")) {
@@ -948,31 +850,7 @@ void validateSimulation(const OemSimulationSettings& settings) {
         (settings.boundary != QStringLiteral("MUR") &&
          settings.boundary != QStringLiteral("PML_8")) ||
         (settings.engine != QStringLiteral("cpu") &&
-         settings.engine != QStringLiteral("gpu")) ||
-        (settings.waveguideMode != QStringLiteral("TE10") &&
-         settings.waveguideMode != QStringLiteral("TE20") &&
-         settings.waveguideMode != QStringLiteral("TE01") &&
-         settings.waveguideMode != QStringLiteral("TE11")) ||
-        !inRange(settings.waveguideFrequencyStartGHz, 0.001, 1000) ||
-        !inRange(settings.waveguideFrequencyStopGHz,
-                 settings.waveguideFrequencyStartGHz + 0.001, 1000) ||
-        !inRange(settings.waveguideWidthMm, 0.1, 1000) ||
-        !inRange(settings.waveguideHeightMm, 0.1, 1000) ||
-        !inRange(settings.waveguideLengthMm, 0.1, 10000) ||
-        !inRange(settings.waveguidePortDepthMm, 0.1, settings.waveguideLengthMm) ||
-        !inRange(settings.antennaSubstrateWidthMm, 1, 1000) ||
-        !inRange(settings.antennaSubstrateLengthMm, 1, 1000) ||
-        !inRange(settings.antennaSubstrateThicknessMm, 0.1, 100) ||
-        !inRange(settings.antennaPatchWidthMm, 0.1,
-                 settings.antennaSubstrateWidthMm) ||
-        !inRange(settings.antennaPatchLengthMm, 0.1,
-                 settings.antennaSubstrateLengthMm) ||
-        !inRange(settings.antennaFeedPositionMm,
-                 -settings.antennaSubstrateWidthMm / 2.0,
-                 settings.antennaSubstrateWidthMm / 2.0) ||
-        !inRange(settings.antennaRelativePermittivity, 1, 1000) ||
-        !inRange(settings.antennaConductivitySPerM, 0, 1e8) ||
-        !inRange(settings.antennaLossTangent, 0, 10)) {
+         settings.engine != QStringLiteral("gpu"))) {
         invalid(QStringLiteral("Project contains invalid simulation or model settings."));
     }
 }
@@ -1072,11 +950,8 @@ bool writeOemProject(const QString& path, const OemProjectDocument& project,
         for (const auto& solid : project.solids) validateSolid(solid);
         validateSimulation(project.simulation);
         validateDesign(project);
-        if (project.resultKind != QStringLiteral("none") &&
-            project.resultKind != QStringLiteral("cad") &&
-            project.resultKind != QStringLiteral("waveguide") &&
-            project.resultKind != QStringLiteral("antenna")) {
-            invalid(QStringLiteral("Unknown project result kind: %1").arg(project.resultKind));
+        if (project.resultKind.isEmpty()) {
+            invalid(QStringLiteral("Project result kind cannot be empty."));
         }
         if (project.resultKind == QStringLiteral("none") &&
             !project.resultFiles.isEmpty()) {

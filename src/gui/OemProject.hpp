@@ -15,36 +15,20 @@ inline constexpr char OemProjectFormatVersion[] = "0.0.1";
 
 struct OemSimulationSettings {
     double frequencyStartGHz = 1.0;
-    double frequencyStopGHz = 3.0;
+    double frequencyStopGHz = 2.0;
     int frequencyPoints = 201;
     int meshDivisions = 30;
-    int maximumTimesteps = 30000;
+    int maximumTimesteps = 20000;
     QString boundary = QStringLiteral("MUR");
     QString portAxis = QStringLiteral("z");
-    double portStartXmm = -2.0;
-    double portStartYmm = 10.0;
-    double portStartZmm = -1.0;
-    double portStopXmm = -2.0;
-    double portStopYmm = 10.0;
-    double portStopZmm = 2.6;
+    double portStartXmm = 0.0;
+    double portStartYmm = 0.0;
+    double portStartZmm = 0.0;
+    double portStopXmm = 0.0;
+    double portStopYmm = 0.0;
+    double portStopZmm = 1.0;
     double portImpedanceOhm = 50.0;
     QString engine = QStringLiteral("cpu");
-    QString waveguideMode = QStringLiteral("TE10");
-    double waveguideFrequencyStartGHz = 8.2;
-    double waveguideFrequencyStopGHz = 12.4;
-    double waveguideWidthMm = 22.86;
-    double waveguideHeightMm = 10.16;
-    double waveguideLengthMm = 100.0;
-    double waveguidePortDepthMm = 5.0;
-    double antennaSubstrateWidthMm = 60.0;
-    double antennaSubstrateLengthMm = 60.0;
-    double antennaSubstrateThicknessMm = 1.524;
-    double antennaPatchWidthMm = 32.0;
-    double antennaPatchLengthMm = 40.0;
-    double antennaFeedPositionMm = -6.0;
-    double antennaRelativePermittivity = 3.38;
-    double antennaConductivitySPerM = 0.0;
-    double antennaLossTangent = 0.0;
 };
 
 struct OemParameter {

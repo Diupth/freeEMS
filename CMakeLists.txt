@@ -39,7 +39,6 @@ else()
 endif()
 target_compile_definitions(rf_sim_gui PRIVATE
     RF_SIM_SOLVER_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/scripts/openems_patch.py"
-    RF_SIM_WR90_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/scripts/openems_wr90.py"
     RF_SIM_OEM_PACKAGE_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/scripts/oem_package.py"
     RF_SIM_PYTHON_DEFAULT="${OPENEMS_PYTHON_DEFAULT}"
     RF_SIM_SMOKE_OUTPUT="${CMAKE_BINARY_DIR}/artifacts/gui-smoke"
@@ -66,7 +65,6 @@ if(BUILD_TESTING)
     add_test(NAME gui_direct_pick_smoke COMMAND rf_sim_gui --smoke-direct-pick)
     add_test(NAME gui_project_io_smoke COMMAND rf_sim_gui --smoke-project-io)
     add_test(NAME gui_empty_startup_smoke COMMAND rf_sim_gui --smoke-empty-startup)
-    add_test(NAME gui_wr90_smoke COMMAND rf_sim_gui --smoke-wr90-run)
     add_test(
         NAME gui_waveguide_project_smoke
         COMMAND rf_sim_gui --smoke-open-project
@@ -78,15 +76,13 @@ if(BUILD_TESTING)
                 "${CMAKE_CURRENT_SOURCE_DIR}/antenna.oem"
     )
     add_test(NAME gui_cancel_smoke COMMAND rf_sim_gui --smoke-cancel)
-    add_test(NAME gui_antenna_smoke COMMAND rf_sim_gui --smoke-antenna-run)
     add_test(NAME gui_x_port_smoke COMMAND rf_sim_gui --smoke-x-port)
     set_tests_properties(
         gui_smoke gui_draw_smoke gui_curve_draw_smoke gui_project_io_smoke
         gui_empty_startup_smoke
-        gui_wr90_smoke
         gui_waveguide_project_smoke gui_antenna_project_smoke
         gui_cancel_smoke
-        gui_antenna_smoke gui_direct_pick_smoke gui_x_port_smoke
+        gui_direct_pick_smoke gui_x_port_smoke
         PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     )

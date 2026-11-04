@@ -19,7 +19,12 @@ Các vùng chính:
 - **Menu Bar:** File, Home, Modeling, Simulation, Post-Processing, View,
   Tools và Help.
 - **Ribbon:** các nút có cả icon lẫn nhãn; chọn tab để xem công cụ theo
-  công việc.
+  công việc. Tab **Simulation** có dropdown **Solver Selection** với
+  **openEMS**, **MEEP**, **PALACE** và **NEC2**; dropdown **Domain** có
+  **Frequency Domain Solver** và **Time Domain Solver**, mỗi lựa chọn có icon
+  riêng. Các solver ngoài openEMS và lựa chọn miền hiện mới là điều khiển giao
+  diện, chưa được nối vào backend mô phỏng. **Solver Options** hiện chưa có nội
+  dung và chưa thực hiện hành động; cấu hình solver sẽ được bổ sung sau.
 - **Navigation Tree:** Geometry, Materials, Excitations và Results. Chọn mục
   để hiển thị nội dung tương ứng ở panel trung tâm; chọn solid trong Geometry
   hoặc click vào solid trong viewport để chỉnh sửa.
@@ -46,7 +51,8 @@ Layout** khôi phục kích thước panel mặc định.
    **Save All**. Tệp dự án dùng định dạng `.oem`.
 4. Chọn **File → Open Project** để mở dự án; **Open Recent** hiển thị tối đa
    10 dự án đã lưu hoặc mở gần đây. **Close Project** đóng dự án hiện tại sau
-   khi xác nhận bỏ các thay đổi chưa lưu.
+   khi xác nhận bỏ các thay đổi chưa lưu. Sau khi mở `.oem`, giao diện mặc định
+   hiển thị Geometry; kết quả đi kèm dự án vẫn được nạp để xem trong Results.
 5. **Project Settings** mở bảng cấu hình mô phỏng. **Import** hiện hỗ trợ mô
    hình CAD định dạng `.step`/`.stp`; **Export** cho phép xuất mô hình STEP
    hoặc lưu dự án OEM sang vị trí khác.
@@ -63,7 +69,7 @@ Layout** khôi phục kích thước panel mặc định.
 4. Chọn solid trong Navigation Tree hoặc click solid trong viewport.
 5. Trong Properties, chỉnh Origin X/Y/Z, Length, Width, Height và Rotation
    X/Y/Z. Plate có thêm Hole radius.
-6. Nhấn **Top / 3D View** hoặc **Fit View** để đổi góc nhìn/phóng vừa mô hình.
+6. Nhấn **3D View** hoặc **Fit View** để đổi góc nhìn/phóng vừa mô hình.
    Kéo nền viewport để xoay góc nhìn.
 
 Các nút **Add Plate**, **Add Box** và **Add Cylinder** tạo primitive với kích
@@ -98,8 +104,10 @@ thuộc tần số, tensor, từ thẩm tùy chỉnh hoặc thư viện vật li
 
 ## 5. Thiết lập port và bài toán
 
-Mở tab **Simulation** để đặt frequency range, số điểm, mesh divisions per
-wavelength, maximum timesteps, boundary, impedance và chọn CPU/GPU.
+Trang **Excitations** có thiết lập chung cho scene CAD: frequency range, số
+điểm, mesh divisions per wavelength, maximum timesteps, boundary, lumped port
+và CPU/GPU. Các lựa chọn **Solver Selection** và **Domain** trên Ribbon hiện
+chỉ là giao diện; chưa điều khiển backend. **Solver Options** chưa có nội dung.
 
 ### CAD lumped port
 
@@ -116,32 +124,9 @@ Prototype hỗ trợ **một lumped port** cho scene CAD:
 nguồn dòng/áp tùy ý. Mô hình phải có cấu trúc cấp nguồn vật lý phù hợp thì
 S11 mới có ý nghĩa thiết kế. Port mặc định chỉ là giá trị khởi đầu.
 
-### WR90 rectangular waveguide
-
-Chọn mode TE10/TE20/TE01/TE11 và frequency start/stop riêng cho WR90. Nhấn
-**Run WR90** để tạo hai modal waveguide ports tự động và tính S11/S21/S12/S22.
-Dải quét phải nằm trên cutoff của mode. Ví dụ với WR90:
-
-- TE10: cutoff xấp xỉ 6.56 GHz
-- TE20: cutoff xấp xỉ 13.11 GHz
-- TE01: cutoff xấp xỉ 14.76 GHz
-- TE11: cutoff xấp xỉ 16.15 GHz
-
-Ứng dụng từ chối dải có điểm đầu dưới cutoff. TE10 và TE20 đã được chạy kiểm
-thử; TE01/TE11 hiện chưa có benchmark.
-
-### Antenna patch reference
-
-Nhấn **Run Patch Antenna** để chạy mô hình patch tham chiếu dựng sẵn. Solver
-dùng frequency range, mesh, timesteps, boundary, impedance và CPU/GPU đã
-chọn. Kết quả này thuộc mô hình tham chiếu, không tự động áp dụng lên các
-solid CAD đang vẽ.
-
 ## 6. Chạy, theo dõi và hủy mô phỏng
 
 - **Run simulation:** chạy scene CAD hiện tại.
-- **Run WR90:** chạy rectangular waveguide tham chiếu theo mode/dải tần đã chọn.
-- **Run Patch Antenna:** chạy patch tham chiếu và hậu xử lý gần/trường xa.
 - Trong lúc chạy, xem progress indicator và log ở dock **Progress / Messages**.
 - Nhấn **Cancel simulation** để dừng tiến trình solver.
 
@@ -154,27 +139,17 @@ không bao gồm toàn bộ overhead của hệ điều hành, backend hoặc fi
 
 Mở tab **Results**:
 
-- CAD: S11 và waveform port.
-- WR90: S11/S21, VSWR hai cổng và waveform.
-- Patch antenna: S11/VSWR, radiation pattern theo hai mặt phẳng φ, và bản đồ
-  lát cắt gần trường |E|/|H|.
+- CAD: S11 và waveform của scene hiện tại.
+- **Open Results Folder** mở thư mục đầu ra trong file manager.
 
-Các plot và bản đồ trường chỉ được nạp khi CSV tương ứng tồn tại. Patch
-reference xuất `near_field_antenna.csv`, `far_field_antenna.csv` và các dump
-HDF5 E/H trong thư mục simulation riêng. Dùng **Load WR90 results** hoặc
-**Load Antenna results** để mở kết quả đã lưu; **Open results folder** mở thư
-mục đầu ra trong file manager.
-
-Các kết quả mẫu hiện có:
-
-- `build/artifacts/wr90` — WR90 lần chạy từ GUI.
-- `build/artifacts/antenna` — patch antenna lần chạy từ GUI.
-- `build/artifacts/reference_wr90`, `reference_wr90_te20`,
-  `reference_antenna` — benchmark tự động.
+Các file OEM mẫu cũ được giữ làm dữ liệu kiểm thử; hình học và tham số được
+đọc từ project, không được dựng sẵn trong ứng dụng. Ứng dụng hiện chưa có
+trình hiển thị kết quả chuyên biệt cho các định dạng kết quả trong những file
+mẫu đó.
 
 Smith Chart, trường E/H thể tích 3D, transient animation, surface current,
 Poynting vector và far-field cho scene CAD tùy ý chưa được triển khai. Không
-diễn giải kết quả của mô hình tham chiếu như kết quả của mô hình CAD đang mở.
+diễn giải kết quả của một project khác như kết quả của mô hình CAD đang mở.
 
 ## 8. Kiểm thử
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an openEMS patch-antenna reference model and export S11 data."""
+"""Run an openEMS CAD scene or a standalone patch-reference test."""
 
 import argparse
 import csv
@@ -65,50 +65,45 @@ def main() -> None:
         parser.error("invalid timestep, mesh, frequency, sample-count, or port settings")
     if args.max_cells < 1000:
         parser.error("--max-cells must be at least 1000")
-    antenna_values = (
-        args.substrate_width_mm,
-        args.substrate_length_mm,
-        args.substrate_thickness_mm,
-        args.patch_width_mm,
-        args.patch_length_mm,
-        args.feed_position_mm,
-        args.substrate_permittivity,
-        args.substrate_conductivity_s_per_m,
-        args.substrate_loss_tangent,
-    )
-    if (
-        not all(np.isfinite(value) for value in antenna_values)
-        or args.substrate_width_mm <= 0
-        or args.substrate_length_mm <= 0
-        or args.substrate_thickness_mm <= 0
-        or args.patch_width_mm <= 0
-        or args.patch_length_mm <= 0
-        or args.patch_width_mm > args.substrate_width_mm
-        or args.patch_length_mm > args.substrate_length_mm
-        or abs(args.feed_position_mm) > args.patch_width_mm / 2
-        or args.substrate_permittivity < 1
-        or args.substrate_conductivity_s_per_m < 0
-        or args.substrate_loss_tangent < 0
-    ):
-        parser.error("invalid antenna geometry or substrate material settings")
+    if not args.scene:
+        antenna_values = (
+            args.substrate_width_mm,
+            args.substrate_length_mm,
+            args.substrate_thickness_mm,
+            args.patch_width_mm,
+            args.patch_length_mm,
+            args.feed_position_mm,
+            args.substrate_permittivity,
+            args.substrate_conductivity_s_per_m,
+            args.substrate_loss_tangent,
+        )
+        if (
+            not all(np.isfinite(value) for value in antenna_values)
+            or args.substrate_width_mm <= 0
+            or args.substrate_length_mm <= 0
+            or args.substrate_thickness_mm <= 0
+            or args.patch_width_mm <= 0
+            or args.patch_length_mm <= 0
+            or args.patch_width_mm > args.substrate_width_mm
+            or args.patch_length_mm > args.substrate_length_mm
+            or abs(args.feed_position_mm) > args.patch_width_mm / 2
+            or args.substrate_permittivity < 1
+            or args.substrate_conductivity_s_per_m < 0
+            or args.substrate_loss_tangent < 0
+        ):
+            parser.error("invalid patch-reference geometry or material settings")
 
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    simulation_path = output / f"patch_{args.engine}_{time.time_ns()}"
+    simulation_name = "cad_scene" if args.scene else "patch_reference"
+    simulation_path = output / f"{simulation_name}_{args.engine}_{time.time_ns()}"
     simulation_path.mkdir(parents=True, exist_ok=False)
 
     f_start_hz = args.f_start_ghz * 1.0e9
     f_stop_hz = args.f_stop_ghz * 1.0e9
     f0 = 0.5 * (f_start_hz + f_stop_hz)
     fc = 0.5 * (f_stop_hz - f_start_hz)
-    substrate_width = args.substrate_width_mm
-    substrate_length = args.substrate_length_mm
-    substrate_thickness = args.substrate_thickness_mm
-    patch_width = args.patch_width_mm
-    patch_length = args.patch_length_mm
-    feed_position = args.feed_position_mm
     mesh_resolution = C0 / f_stop_hz / 1e-3 / args.mesh_div
-    near_field_z = substrate_thickness + 5.0
     nf2ff = None
 
     fdtd_options = {"NrTS": args.timesteps, "EndCriteria": 1e-4}
@@ -204,6 +199,13 @@ def main() -> None:
         )
         simulation_kind = "cad_scene"
     else:
+        substrate_width = args.substrate_width_mm
+        substrate_length = args.substrate_length_mm
+        substrate_thickness = args.substrate_thickness_mm
+        patch_width = args.patch_width_mm
+        patch_length = args.patch_length_mm
+        feed_position = args.feed_position_mm
+        near_field_z = substrate_thickness + 5.0
         extent_x = max(substrate_width, patch_width, abs(feed_position) * 2)
         extent_y = max(substrate_length, patch_length)
         mesh.AddLine("x", [-max(100.0, extent_x * 1.5), max(100.0, extent_x * 1.5)])
@@ -418,26 +420,25 @@ def main() -> None:
         "port_impedance_ohms": args.port_impedance,
         "s11_csv": s11_file.name,
         "s11_touchstone": touchstone_path.name,
-        "near_field_z_mm": near_field_z if nf2ff is not None else None,
-        "antenna_field_outputs": field_files,
-        "antenna_geometry_mm": {
-            "substrate_width": substrate_width,
-            "substrate_length": substrate_length,
-            "substrate_thickness": substrate_thickness,
-            "patch_width": patch_width,
-            "patch_length": patch_length,
-            "feed_position": feed_position,
-        }
-        if nf2ff is not None
-        else None,
-        "antenna_substrate_material": {
-            "relative_permittivity": args.substrate_permittivity,
-            "conductivity_s_per_m": args.substrate_conductivity_s_per_m,
-            "loss_tangent": args.substrate_loss_tangent,
-        }
-        if nf2ff is not None
-        else None,
     }
+    if nf2ff is not None:
+        summary.update({
+            "near_field_z_mm": near_field_z,
+            "antenna_field_outputs": field_files,
+            "antenna_geometry_mm": {
+                "substrate_width": substrate_width,
+                "substrate_length": substrate_length,
+                "substrate_thickness": substrate_thickness,
+                "patch_width": patch_width,
+                "patch_length": patch_length,
+                "feed_position": feed_position,
+            },
+            "antenna_substrate_material": {
+                "relative_permittivity": args.substrate_permittivity,
+                "conductivity_s_per_m": args.substrate_conductivity_s_per_m,
+                "loss_tangent": args.substrate_loss_tangent,
+            },
+        })
     summary_name = "summary_scene.json" if args.scene else f"summary_{args.engine}.json"
     (output / summary_name).write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"

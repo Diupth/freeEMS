@@ -468,16 +468,6 @@ public:
                                    QStringLiteral("VSWR"));
         resultPlots_->addTab(vswrPlot_, QStringLiteral("VSWR"));
         resultPlots_->addTab(wavePlot_, QStringLiteral("Waveform"));
-        farFieldPlot_ = new PlotWidget(QStringLiteral("Patch antenna radiation pattern"),
-                                       QStringLiteral("Theta (deg)"),
-                                       QStringLiteral("Directivity (dBi)"));
-        nearFieldEMap_ = new FieldMapWidget(QStringLiteral("Near-field |E| slice"),
-                                            QStringLiteral("E (V/m)"));
-        nearFieldHMap_ = new FieldMapWidget(QStringLiteral("Near-field |H| slice"),
-                                            QStringLiteral("H (A/m)"));
-        resultPlots_->addTab(farFieldPlot_, QStringLiteral("Radiation Pattern"));
-        resultPlots_->addTab(nearFieldEMap_, QStringLiteral("Near Field E"));
-        resultPlots_->addTab(nearFieldHMap_, QStringLiteral("Near Field H"));
         auto* right = new QWidget;
         auto* rightLayout = new QVBoxLayout(right);
         rightLayout->addWidget(view_, 2);
@@ -535,22 +525,22 @@ public:
         auto* simulationLayout = new QVBoxLayout(simulationPage);
         auto* simulationForm = new QFormLayout;
         frequencyStart_ = makeNumberControl(0.001, 1000.0, 1.0, QStringLiteral(" GHz"));
-        frequencyStop_ = makeNumberControl(0.002, 1000.0, 3.0, QStringLiteral(" GHz"));
+        frequencyStop_ = makeNumberControl(0.002, 1000.0, 2.0, QStringLiteral(" GHz"));
         frequencyPoints_ = makeNumberControl(2, 10001, 201);
         frequencyPoints_->setDecimals(0);
         meshDivisions_ = makeNumberControl(8, 80, 30);
         meshDivisions_->setDecimals(0);
-        maxTimesteps_ = makeNumberControl(1000, 10000000, 30000);
+        maxTimesteps_ = makeNumberControl(1000, 10000000, 20000);
         maxTimesteps_->setDecimals(0);
         boundary_ = new QComboBox;
         boundary_->addItem(QStringLiteral("MUR"), QStringLiteral("MUR"));
         boundary_->addItem(QStringLiteral("PML_8"), QStringLiteral("PML_8"));
-        portStartX_ = makeNumberControl(-1000, 1000, -2, QStringLiteral(" mm"));
-        portStartY_ = makeNumberControl(-1000, 1000, 10, QStringLiteral(" mm"));
-        portStartZ_ = makeNumberControl(-1000, 1000, -1, QStringLiteral(" mm"));
-        portStopX_ = makeNumberControl(-1000, 1000, -2, QStringLiteral(" mm"));
-        portStopY_ = makeNumberControl(-1000, 1000, 10, QStringLiteral(" mm"));
-        portStopZ_ = makeNumberControl(-1000, 1000, 2.6, QStringLiteral(" mm"));
+        portStartX_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
+        portStartY_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
+        portStartZ_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
+        portStopX_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
+        portStopY_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
+        portStopZ_ = makeNumberControl(-1000, 1000, 1, QStringLiteral(" mm"));
         portDirection_ = new QComboBox;
         portDirection_->addItem(QStringLiteral("X"), QStringLiteral("x"));
         portDirection_->addItem(QStringLiteral("Y"), QStringLiteral("y"));
@@ -558,37 +548,6 @@ public:
         portDirection_->setCurrentIndex(
             portDirection_->findData(QStringLiteral("z")));
         portImpedance_ = makeNumberControl(1, 10000, 50, QStringLiteral(" Ω"));
-        waveguideMode_ = new QComboBox;
-        waveguideMode_->addItems({QStringLiteral("TE10"), QStringLiteral("TE20"),
-                                  QStringLiteral("TE01"), QStringLiteral("TE11")});
-        waveguideFrequencyStart_ =
-            makeNumberControl(0.001, 1000.0, 8.2, QStringLiteral(" GHz"));
-        waveguideFrequencyStop_ =
-            makeNumberControl(0.002, 1000.0, 12.4, QStringLiteral(" GHz"));
-        waveguideWidth_ = makeNumberControl(0.1, 1000.0, 22.86,
-                                            QStringLiteral(" mm"));
-        waveguideHeight_ = makeNumberControl(0.1, 1000.0, 10.16,
-                                             QStringLiteral(" mm"));
-        waveguideLength_ = makeNumberControl(0.1, 10000.0, 100.0,
-                                             QStringLiteral(" mm"));
-        waveguidePortDepth_ = makeNumberControl(0.1, 1000.0, 5.0,
-                                                QStringLiteral(" mm"));
-        antennaSubstrateWidth_ = makeNumberControl(1.0, 1000.0, 60.0,
-                                                   QStringLiteral(" mm"));
-        antennaSubstrateLength_ = makeNumberControl(1.0, 1000.0, 60.0,
-                                                    QStringLiteral(" mm"));
-        antennaSubstrateThickness_ = makeNumberControl(0.1, 100.0, 1.524,
-                                                       QStringLiteral(" mm"));
-        antennaPatchWidth_ = makeNumberControl(0.1, 1000.0, 32.0,
-                                               QStringLiteral(" mm"));
-        antennaPatchLength_ = makeNumberControl(0.1, 1000.0, 40.0,
-                                                QStringLiteral(" mm"));
-        antennaFeedPosition_ = makeNumberControl(-500.0, 500.0, -6.0,
-                                                 QStringLiteral(" mm"));
-        antennaRelativePermittivity_ = makeNumberControl(1.0, 1000.0, 3.38);
-        antennaConductivity_ = makeNumberControl(0.0, 1.0e8, 0.0,
-                                                 QStringLiteral(" S/m"));
-        antennaLossTangent_ = makeNumberControl(0.0, 10.0, 0.0);
         simulationForm->addRow(QStringLiteral("Frequency start"), frequencyStart_);
         simulationForm->addRow(QStringLiteral("Frequency stop"), frequencyStop_);
         simulationForm->addRow(QStringLiteral("S11 samples"), frequencyPoints_);
@@ -603,37 +562,9 @@ public:
         simulationForm->addRow(QStringLiteral("Stop Y"), portStopY_);
         simulationForm->addRow(QStringLiteral("Stop Z"), portStopZ_);
         simulationForm->addRow(QStringLiteral("Port impedance"), portImpedance_);
-        simulationForm->addRow(QStringLiteral("WR90 mode"), waveguideMode_);
-        simulationForm->addRow(QStringLiteral("WR90 frequency start"),
-                               waveguideFrequencyStart_);
-        simulationForm->addRow(QStringLiteral("WR90 frequency stop"),
-                               waveguideFrequencyStop_);
-        simulationForm->addRow(QStringLiteral("Waveguide width A"), waveguideWidth_);
-        simulationForm->addRow(QStringLiteral("Waveguide height B"), waveguideHeight_);
-        simulationForm->addRow(QStringLiteral("Waveguide length"), waveguideLength_);
-        simulationForm->addRow(QStringLiteral("Waveguide port depth"),
-                               waveguidePortDepth_);
-        simulationForm->addRow(QStringLiteral("Antenna substrate width"),
-                               antennaSubstrateWidth_);
-        simulationForm->addRow(QStringLiteral("Antenna substrate length"),
-                               antennaSubstrateLength_);
-        simulationForm->addRow(QStringLiteral("Antenna substrate thickness"),
-                               antennaSubstrateThickness_);
-        simulationForm->addRow(QStringLiteral("Antenna patch width"),
-                               antennaPatchWidth_);
-        simulationForm->addRow(QStringLiteral("Antenna patch length"),
-                               antennaPatchLength_);
-        simulationForm->addRow(QStringLiteral("Antenna feed X"),
-                               antennaFeedPosition_);
-        simulationForm->addRow(QStringLiteral("Substrate relative permittivity"),
-                               antennaRelativePermittivity_);
-        simulationForm->addRow(QStringLiteral("Substrate conductivity"),
-                               antennaConductivity_);
-        simulationForm->addRow(QStringLiteral("Substrate loss tangent"),
-                               antennaLossTangent_);
         simulationLayout->addLayout(simulationForm);
         auto* simulationHelp = new QLabel(QStringLiteral(
-            "CAD workflow: draw/select geometry → assign material → set frequency, mesh and boundary → choose X/Y/Z and set the single red lumped-port line across the feed gap → Run simulation. For waveguides, choose Run WR90 and select a TE mode; both modal ports are created automatically. The sweep must stay above that mode's cutoff."));
+            "CAD workflow: draw/select geometry → assign material → set frequency, mesh and boundary → configure the lumped port → Run simulation."));
         simulationHelp->setWordWrap(true);
         simulationLayout->addWidget(simulationHelp);
         auto* engineRow = new QHBoxLayout;
@@ -641,18 +572,12 @@ public:
         engine_->addItem(QStringLiteral("CPU"), QStringLiteral("cpu"));
         engine_->addItem(QStringLiteral("GPU (if available)"), QStringLiteral("gpu"));
         runButton_ = new QPushButton(QStringLiteral("Run simulation"));
-        wr90Button_ = new QPushButton(QStringLiteral("Run WR90 (TE10)"));
-        antennaButton_ = new QPushButton(QStringLiteral("Run Patch Antenna"));
         cancelButton_ = new QPushButton(QStringLiteral("Cancel simulation"));
         setButtonIcon(runButton_, QStyle::SP_MediaPlay);
-        setButtonIcon(wr90Button_, QStyle::SP_ComputerIcon);
-        setButtonIcon(antennaButton_, QStyle::SP_ComputerIcon);
         setButtonIcon(cancelButton_, QStyle::SP_MediaStop);
         cancelButton_->setEnabled(false);
         engineRow->addWidget(engine_);
         engineRow->addWidget(runButton_);
-        engineRow->addWidget(wr90Button_);
-        engineRow->addWidget(antennaButton_);
         engineRow->addWidget(cancelButton_);
         simulationLayout->addLayout(engineRow);
         status_ = new QLabel(QStringLiteral("Ready"));
@@ -786,10 +711,6 @@ public:
             });
         }
         connect(runButton_, &QPushButton::clicked, this, [this] { runSimulation(); });
-        connect(wr90Button_, &QPushButton::clicked, this,
-                [this] { runWr90Simulation(); });
-        connect(antennaButton_, &QPushButton::clicked, this,
-                [this] { runAntennaSimulation(); });
         connect(cancelButton_, &QPushButton::clicked, this,
                 [this] { cancelSimulation(); });
         connect(newProjectButton, &QPushButton::clicked, this,
@@ -811,23 +732,13 @@ public:
             updateParameterList();
         });
         for (auto* control : {frequencyStart_, frequencyStop_, frequencyPoints_,
-                              meshDivisions_, maxTimesteps_, portImpedance_,
-                              waveguideFrequencyStart_, waveguideFrequencyStop_,
-                              waveguideWidth_, waveguideHeight_, waveguideLength_,
-                              waveguidePortDepth_, antennaSubstrateWidth_,
-                              antennaSubstrateLength_, antennaSubstrateThickness_,
-                              antennaPatchWidth_, antennaPatchLength_,
-                              antennaFeedPosition_, antennaRelativePermittivity_,
-                              antennaConductivity_, antennaLossTangent_}) {
+                              meshDivisions_, maxTimesteps_, portImpedance_}) {
             connect(control, &QDoubleSpinBox::valueChanged, this, [this] {
-                updateReferenceGeometry();
                 updateParameterList();
             });
         }
-        for (auto* control : {boundary_, waveguideMode_}) {
-            connect(control, qOverload<int>(&QComboBox::currentIndexChanged),
-                    this, [this](int) { updateParameterList(); });
-        }
+        connect(boundary_, qOverload<int>(&QComboBox::currentIndexChanged),
+                this, [this](int) { updateParameterList(); });
         connect(exportStepButton, &QPushButton::clicked, this,
                 [this] { exportStep(); });
         connect(openResultsButton, &QPushButton::clicked, this, [this] {
@@ -845,8 +756,6 @@ public:
                 qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
                 this, [this](int code, QProcess::ExitStatus exitStatus) {
             runButton_->setEnabled(true);
-            wr90Button_->setEnabled(true);
-            antennaButton_->setEnabled(true);
             cancelButton_->setEnabled(false);
             progressBar_->setRange(0, 100);
             progressBar_->setValue(100);
@@ -868,40 +777,19 @@ public:
             const bool gpuConfirmed =
                 output.contains(QStringLiteral("enabled GPU engine"),
                                Qt::CaseInsensitive);
-            const bool resultsExist = wr90Run_
-                ? QFileInfo::exists(resultDirectory_ + QStringLiteral("/s_parameters_wr90.csv")) &&
-                  QFileInfo::exists(resultDirectory_ + QStringLiteral("/s_parameters_wr90.s2p")) &&
-                  QFileInfo::exists(resultDirectory_ + QStringLiteral("/vswr_wr90.csv")) &&
-                  QFileInfo::exists(resultDirectory_ + QStringLiteral("/waveform_wr90.csv"))
-                : antennaRun_
-                    ? QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_antenna.csv")) &&
-                      QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_antenna.s1p")) &&
-                      QFileInfo::exists(resultDirectory_ + QStringLiteral("/far_field_antenna.csv")) &&
-                      QFileInfo::exists(resultDirectory_ + QStringLiteral("/near_field_antenna.csv"))
-                    : QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.csv")) &&
-                      QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.s1p")) &&
-                      QFileInfo::exists(resultDirectory_ + QStringLiteral("/waveform_scene.csv"));
+            const bool resultsExist =
+                QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.csv")) &&
+                QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.s1p")) &&
+                QFileInfo::exists(resultDirectory_ + QStringLiteral("/waveform_scene.csv"));
             if (exitStatus == QProcess::NormalExit && code == 0 &&
                 (!gpuRequested || gpuConfirmed) && resultsExist) {
                 if (smokeTestExpectedCancel_) smokeTestExitCode_ = 1;
                 status_->setText(QStringLiteral("Simulation completed; results loaded below."));
-                if (wr90Run_) {
-                    loadWr90Results(resultDirectory_);
-                } else if (antennaRun_) {
-                    loadAntennaResults(resultDirectory_);
-                } else {
-                    antennaRun_ = false;
-                    view_->setAntennaReference(false);
-                    view_->setWaveguideReference(false);
-                    s11Plot_->loadCsv(resultDirectory_ + QStringLiteral("/s11_scene.csv"),
-                                      0, 3, 1e-9, 1.0);
-                    vswrPlot_->clear();
-                    wavePlot_->loadCsv(resultDirectory_ + QStringLiteral("/waveform_scene.csv"),
-                                       0, 1, 1e9, 1.0, 2);
-                    farFieldPlot_->clear();
-                    nearFieldEMap_->clear();
-                    nearFieldHMap_->clear();
-                }
+                s11Plot_->loadCsv(resultDirectory_ + QStringLiteral("/s11_scene.csv"),
+                                  0, 3, 1e-9, 1.0);
+                vswrPlot_->clear();
+                wavePlot_->loadCsv(resultDirectory_ + QStringLiteral("/waveform_scene.csv"),
+                                   0, 1, 1e9, 1.0, 2);
                 statusBar()->showMessage(QStringLiteral("Simulation complete — results loaded"));
                 refreshList(currentObjectIndex());
                 workspace_->setCurrentWidget(resultsPage_);
@@ -917,8 +805,6 @@ public:
         connect(solverProcess_, &QProcess::errorOccurred, this,
                 [this](QProcess::ProcessError) {
             runButton_->setEnabled(true);
-            wr90Button_->setEnabled(true);
-            antennaButton_->setEnabled(true);
             cancelButton_->setEnabled(false);
             progressBar_->hide();
             status_->setText(QStringLiteral("Could not start solver."));
@@ -939,7 +825,6 @@ public:
         gridButton->setCheckable(true);
         gridButton->setChecked(true);
         auto* fitViewButton = new QPushButton(QStringLiteral("Fit View"));
-        auto* antennaButton = new QPushButton(QStringLiteral("Patch Antenna"));
         connect(drawPlateButton, &QPushButton::clicked, this, [this] {
             beginRectangleDrawing(rfsim::SolidKind::PlateWithHole);
         });
@@ -966,16 +851,11 @@ public:
             view_->resetCamera();
             topViewEnabled_ = false;
         });
-        connect(antennaButton, &QPushButton::clicked, this, [this] {
-            runAntennaSimulation();
-        });
         createRibbonAndMenus(addPlate, addBox, addCylinder, drawCurve, exportStepButton,
                              openResultsButton, drawPlateButton, drawBoxButton,
                              topViewButton, newProjectButton, openProjectButton,
                              saveProjectButton, duplicateButton, importStepButton,
-                             fuseButton, cutButton, gridButton, fitViewButton,
-                             antennaButton);
-        updateReferenceGeometry();
+                             fuseButton, cutButton, gridButton, fitViewButton);
         refreshList(-1);
         loadSelected();
         loadSelectedMaterial();
@@ -1118,11 +998,6 @@ public:
         runSimulation(QString::fromUtf8(RF_SIM_SMOKE_OUTPUT));
     }
 
-    void startWr90SimulationForSmokeTest() {
-        smokeTestMode_ = true;
-        runWr90Simulation();
-    }
-
     void startXAxisPortSmokeTest() {
         smokeTestMode_ = true;
         ensureSmokeGeometry();
@@ -1135,16 +1010,6 @@ public:
         portStopY_->setValue(10.0);
         portStopZ_->setValue(10.0);
         runSimulation(QString::fromUtf8(RF_SIM_AXIS_PORT_SMOKE_OUTPUT));
-    }
-
-    void startAntennaSimulationForSmokeTest() {
-        smokeTestMode_ = true;
-        frequencyStart_->setValue(1.0);
-        frequencyStop_->setValue(3.0);
-        frequencyPoints_->setValue(51);
-        meshDivisions_->setValue(25);
-        maxTimesteps_->setValue(30000);
-        runAntennaSimulation();
     }
 
     void startDrawSmokeTest() {
@@ -1313,8 +1178,8 @@ public:
             return;
         }
         resultDirectory_ = resultDirectory;
-        wr90Run_ = false;
-        antennaRun_ = false;
+        resultKind_ = QStringLiteral("cad");
+        projectResultFiles_.clear();
         const auto addHistoryParameter = [&](const QString& id, const QString& name,
                                              double value) {
             rfsim::OemParameter parameter;
@@ -1360,17 +1225,9 @@ public:
                           geometryMaterials_.front().id);
         const auto originalObjects = objects_;
         const double originalFrequency = frequencyStart_->value();
-        const double originalAntennaWidth = antennaSubstrateWidth_->value();
-        const double originalWaveguideWidth = waveguideWidth_->value();
-        antennaSubstrateWidth_->setValue(originalAntennaWidth + 5.0);
-        const double expectedAntennaWidth = antennaSubstrateWidth_->value();
-        waveguideWidth_->setValue(originalWaveguideWidth + 1.0);
-        const double expectedWaveguideWidth = waveguideWidth_->value();
         const bool saved = saveProjectFile(projectPath_, &error);
         objects_.clear();
         frequencyStart_->setValue(99.0);
-        antennaSubstrateWidth_->setValue(40.0);
-        waveguideWidth_->setValue(20.0);
         resultDirectory_.clear();
         const bool loaded = saved && loadProjectFile(projectPath_, &error);
         QFile embeddedResult(resultDirectory_ + QStringLiteral("/s11_scene.csv"));
@@ -1382,8 +1239,6 @@ public:
         bool roundTripOkay =
             loaded && objects_.size() == originalObjects.size() &&
             frequencyStart_->value() == originalFrequency &&
-            antennaSubstrateWidth_->value() == expectedAntennaWidth &&
-            waveguideWidth_->value() == expectedWaveguideWidth &&
             objects_[1].kind == rfsim::SolidKind::Curve &&
             objects_[1].curvePoints.size() == 3 &&
             objects_[3].kind == rfsim::SolidKind::Surface &&
@@ -1397,76 +1252,12 @@ public:
                             return feature.type ==
                                 QStringLiteral("solidify.closed-shell");
                         });
-        const auto writeResultFixture = [&](const QString& folder,
-                                            const QMap<QString, QByteArray>& files) {
-            const QString output = directory.filePath(folder);
-            if (!QDir().mkpath(output)) return QString();
-            for (auto it = files.cbegin(); it != files.cend(); ++it) {
-                QFile file(output + QLatin1Char('/') + it.key());
-                if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
-                    file.write(it.value()) != it.value().size()) {
-                    return QString();
-                }
-            }
-            return output;
-        };
-        const QString waveguideResults = writeResultFixture(
-            QStringLiteral("waveguide-results"),
-            {{QStringLiteral("s_parameters_wr90.csv"),
-              "frequency_hz,s11_db,s21_db,s12_db,s22_db\n"
-              "1000000000,-20,-0.1,-0.1,-20\n"},
-             {QStringLiteral("s_parameters_wr90.s2p"),
-              "[Version] 2.1\n# Hz S RI R 50\n[Number of Ports] 2\n"
-              "[Number of Frequencies] 1\n[Reference] 50 50\n"
-              "[Matrix Format] Full\n[Network Data]\n"
-              "1000000000 0.1 0 0.9 0 0.9 0 0.1 0\n[End]\n"},
-             {QStringLiteral("vswr_wr90.csv"),
-              "frequency_hz,vswr_port_1,vswr_port_2\n1000000000,1.2,1.3\n"},
-             {QStringLiteral("waveform_wr90.csv"),
-              "time_s,port_1_voltage_v\n0,1\n"}});
-        if (!waveguideResults.isEmpty()) {
-            resultDirectory_ = waveguideResults;
-            wr90Run_ = true;
-            antennaRun_ = false;
-            roundTripOkay = roundTripOkay &&
-                saveProjectFile(projectPath_, &error);
-            resultDirectory_.clear();
-            roundTripOkay = roundTripOkay &&
-                loadProjectFile(projectPath_, &error) && wr90Run_;
-        } else {
-            roundTripOkay = false;
-        }
-        const QString antennaResults = writeResultFixture(
-            QStringLiteral("antenna-results"),
-            {{QStringLiteral("s11_antenna.csv"),
-              "frequency_hz,s11_db,vswr\n1000000000,-20,1.2\n"},
-             {QStringLiteral("s11_antenna.s1p"),
-              "[Version] 2.1\n# Hz S RI R 50\n[Number of Ports] 1\n"
-              "[Number of Frequencies] 1\n[Reference] 50\n[Network Data]\n"
-              "1000000000 0.1 0\n[End]\n"},
-             {QStringLiteral("far_field_antenna.csv"),
-              "theta_deg,phi_0_dbi,phi_90_dbi\n0,1,1\n"},
-             {QStringLiteral("near_field_antenna.csv"),
-              "x_mm,y_mm,e_magnitude_v_per_m,h_magnitude_a_per_m\n0,0,1,2\n"}});
-        if (!antennaResults.isEmpty()) {
-            resultDirectory_ = antennaResults;
-            wr90Run_ = false;
-            antennaRun_ = true;
-            roundTripOkay = roundTripOkay &&
-                saveProjectFile(projectPath_, &error);
-            resultDirectory_.clear();
-            roundTripOkay = roundTripOkay &&
-                loadProjectFile(projectPath_, &error) && antennaRun_;
-        } else {
-            roundTripOkay = false;
-        }
         smokeTestExitCode_ = roundTripOkay ? 0 : 1;
         QApplication::quit();
     }
 
     void startEmptyStartupSmokeTest() {
         const bool emptyStartup = objects_.empty() && resultDirectory_.isEmpty() &&
-                                  !wr90Run_ && !antennaRun_ &&
                                   !hasActiveProject_;
         if (emptyStartup) newProject();
         smokeTestExitCode_ =
@@ -1480,9 +1271,67 @@ public:
     void startOpenProjectSmokeTest(const QString& path) {
         QString error;
         const bool loaded = !path.isEmpty() && loadProjectFile(path, &error);
+        auto* ribbon = findChild<QTabWidget*>(QStringLiteral("mainRibbon"));
+        const auto ribbonButtons =
+            ribbon ? ribbon->findChildren<QToolButton*>() : QList<QToolButton*>{};
+        const auto openProjectButton =
+            std::find_if(ribbonButtons.cbegin(), ribbonButtons.cend(),
+                         [](const QToolButton* button) {
+                             return button->text() ==
+                                    QStringLiteral("Open Project");
+                         });
+        const bool consistentRibbonWidths =
+            openProjectButton != ribbonButtons.cend() &&
+            std::all_of(ribbonButtons.cbegin(), ribbonButtons.cend(),
+                        [openProjectButton](const QToolButton* button) {
+                            return button->text().isEmpty() ||
+                                   button->width() == (*openProjectButton)->width();
+                        });
+        const auto solverOptionsButton =
+            std::find_if(ribbonButtons.cbegin(), ribbonButtons.cend(),
+                         [](const QToolButton* button) {
+                             return button->text() ==
+                                    QStringLiteral("Solver Options");
+                         });
+        const bool hasSolverOptions =
+            solverOptionsButton != ribbonButtons.cend();
+        QWidget* workspaceBeforeSolverOptions =
+            workspace_->currentWidget();
+        if (solverOptionsButton != ribbonButtons.cend()) {
+            (*solverOptionsButton)->click();
+        }
+        const bool solverOptionsDoesNothing =
+            workspace_->currentWidget() == workspaceBeforeSolverOptions;
+        const QMenu* solverMenu =
+            findChild<QMenu*>(QStringLiteral("solverMenu"));
+        const QMenu* domainMenu =
+            findChild<QMenu*>(QStringLiteral("domainMenu"));
         smokeTestExitCode_ =
             loaded && !solverFiles_.isEmpty() &&
-                    (wr90Run_ || antennaRun_)
+                    !objects_.empty() &&
+                    workspace_->currentWidget() == workspace_->widget(0) &&
+                    solverSelectionButton_ &&
+                    solverSelectionButton_->text() == QStringLiteral("openEMS") &&
+                    solverMenu && solverMenu->actions().size() == 4 &&
+                    solverMenu->actions().at(0)->text() ==
+                        QStringLiteral("openEMS") &&
+                    solverMenu->actions().at(1)->text() == QStringLiteral("MEEP") &&
+                    solverMenu->actions().at(2)->text() ==
+                        QStringLiteral("PALACE") &&
+                    solverMenu->actions().at(3)->text() == QStringLiteral("NEC2") &&
+                    domainSelectionButton_ &&
+                    domainSelectionButton_->text() ==
+                        QStringLiteral("Time Domain") &&
+                    !domainSelectionButton_->icon().isNull() &&
+                    domainMenu && domainMenu->actions().size() == 2 &&
+                    domainMenu->actions().at(0)->text() ==
+                        QStringLiteral("Frequency Domain Solver") &&
+                    !domainMenu->actions().at(0)->icon().isNull() &&
+                    domainMenu->actions().at(1)->text() ==
+                        QStringLiteral("Time Domain Solver") &&
+                    !domainMenu->actions().at(1)->icon().isNull() &&
+                    consistentRibbonWidths && hasSolverOptions &&
+                    solverOptionsDoesNothing
                 ? 0
                 : 1;
         if (!loaded) log_->appendPlainText(error);
@@ -1503,9 +1352,6 @@ public:
     }
 
     int smokeTestExitCode() const { return smokeTestExitCode_; }
-    bool hasLoadedWr90Results() const {
-        return wr90Run_ && !resultDirectory_.isEmpty();
-    }
 
 protected:
     void resizeEvent(QResizeEvent* event) override {
@@ -1562,16 +1408,78 @@ private:
                               QPushButton* saveProject, QPushButton* duplicate,
                               QPushButton* importStep, QPushButton* fuse,
                               QPushButton* cut, QPushButton* grid,
-                              QPushButton* fitView, QPushButton* antenna) {
+                              QPushButton* fitView) {
         auto* ribbon = new QTabWidget;
+        ribbon->setObjectName(QStringLiteral("mainRibbon"));
         ribbon->setMaximumHeight(138);
+        const int ribbonButtonWidth =
+            std::max(fontMetrics().horizontalAdvance(QStringLiteral("Open Project")),
+                     fontMetrics().horizontalAdvance(QStringLiteral("Solver Options"))) +
+            24;
+        const QSize ribbonButtonSize(ribbonButtonWidth, 76);
         ribbon->findChild<QTabBar*>()->setExpanding(false);
         auto* ribbonStyle = new LeftAlignedTabStyle;
         ribbonStyle->setParent(ribbon);
         ribbon->setStyle(ribbonStyle);
         const auto iconFor = [this](const QString& label) {
             const QString text = label.toLower();
-            if (text == QStringLiteral("project settings")) {
+            if (text == QStringLiteral("run") ||
+                text == QStringLiteral("run cad")) {
+                QPixmap pixmap(32, 32);
+                pixmap.fill(Qt::transparent);
+                QPainter painter(&pixmap);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(QStringLiteral("#2e9e49")));
+                QPainterPath play;
+                play.moveTo(9, 5);
+                play.lineTo(27, 16);
+                play.lineTo(9, 27);
+                play.closeSubpath();
+                painter.drawPath(play);
+                return QIcon(pixmap);
+            }
+            if (text.contains(QStringLiteral("time domain"))) {
+                QPixmap pixmap(32, 32);
+                pixmap.fill(Qt::transparent);
+                QPainter painter(&pixmap);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setPen(QPen(QColor(QStringLiteral("#2474b5")), 2.4,
+                                    Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                QPainterPath wave;
+                for (int point = 0; point <= 24; ++point) {
+                    const double x = 4.0 + point;
+                    const double phase = point * 2.0 * 3.14159265358979323846 / 24.0;
+                    const double y = 16.0 - 8.0 * std::sin(phase);
+                    if (point == 0) wave.moveTo(x, y);
+                    else wave.lineTo(x, y);
+                }
+                painter.drawPath(wave);
+                return QIcon(pixmap);
+            }
+            if (text.contains(QStringLiteral("frequency domain"))) {
+                QPixmap pixmap(32, 32);
+                pixmap.fill(Qt::transparent);
+                QPainter painter(&pixmap);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setPen(QPen(QColor(QStringLiteral("#8054b8")), 2.0,
+                                    Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                painter.drawLine(QPointF(5, 27), QPointF(28, 27));
+                painter.drawLine(QPointF(5, 27), QPointF(5, 5));
+                QPainterPath spectrum;
+                spectrum.moveTo(6, 25);
+                spectrum.lineTo(10, 23);
+                spectrum.lineTo(13, 14);
+                spectrum.lineTo(16, 23);
+                spectrum.lineTo(20, 21);
+                spectrum.lineTo(23, 8);
+                spectrum.lineTo(26, 22);
+                spectrum.lineTo(28, 24);
+                painter.drawPath(spectrum);
+                return QIcon(pixmap);
+            }
+            if (text == QStringLiteral("project settings") ||
+                text == QStringLiteral("settings")) {
                 QPixmap pixmap(32, 32);
                 pixmap.fill(Qt::transparent);
                 QPainter painter(&pixmap);
@@ -1600,7 +1508,8 @@ private:
                 painter.drawEllipse(QPointF(16.0, 16.0), 4.5, 4.5);
                 return QIcon(pixmap);
             }
-            if (text.contains(QStringLiteral("close project"))) {
+            if (text == QStringLiteral("close") ||
+                text.contains(QStringLiteral("close project"))) {
                 QPixmap pixmap(32, 32);
                 pixmap.fill(Qt::transparent);
                 QPainter painter(&pixmap);
@@ -1693,10 +1602,10 @@ private:
                 icon = QStyle::SP_FileDialogDetailedView;
             } else if (text.contains(QStringLiteral("result")) ||
                        text.contains(QStringLiteral("plot")) ||
-                       text.contains(QStringLiteral("parameter"))) {
+                       text.contains(QStringLiteral("parameter")) ||
+                       text.contains(QStringLiteral("s-params"))) {
                 icon = QStyle::SP_FileDialogContentsView;
-            } else if (text.contains(QStringLiteral("antenna")) ||
-                       text.contains(QStringLiteral("wr90"))) {
+            } else if (text.contains(QStringLiteral("solver"))) {
                 icon = QStyle::SP_ComputerIcon;
             } else if (text.contains(QStringLiteral("help"))) {
                 icon = QStyle::SP_DialogHelpButton;
@@ -1705,7 +1614,8 @@ private:
         };
         const auto tooltipFor = [](const QString& label) {
             const QString text = label.toLower();
-            if (text == QStringLiteral("new project"))
+            if (text == QStringLiteral("new") ||
+                text == QStringLiteral("new project"))
                 return QStringLiteral("Tạo dự án mô phỏng mới.");
             if (text == QStringLiteral("open project"))
                 return QStringLiteral("Mở dự án đã tồn tại.");
@@ -1721,9 +1631,11 @@ private:
                 return QStringLiteral("Nhập mô hình CAD và dữ liệu hình học được hỗ trợ.");
             if (text == QStringLiteral("export"))
                 return QStringLiteral("Xuất mô hình CAD hoặc dự án mô phỏng.");
-            if (text == QStringLiteral("project settings"))
+            if (text == QStringLiteral("settings") ||
+                text == QStringLiteral("project settings"))
                 return QStringLiteral("Thiết lập cấu hình mô phỏng của dự án.");
-            if (text == QStringLiteral("close project"))
+            if (text == QStringLiteral("close") ||
+                text == QStringLiteral("close project"))
                 return QStringLiteral("Đóng dự án hiện tại.");
             if (text == QStringLiteral("exit"))
                 return QStringLiteral("Thoát phần mềm.");
@@ -1739,17 +1651,13 @@ private:
                 return QStringLiteral("Subtract the second selected solid from the first.");
             if (text.contains(QStringLiteral("run cad")))
                 return QStringLiteral("Run openEMS on the current CAD scene and lumped port.");
-            if (text.contains(QStringLiteral("wr90")))
-                return QStringLiteral("Run the rectangular-waveguide modal-port reference.");
-            if (text.contains(QStringLiteral("antenna")))
-                return QStringLiteral("Run the patch reference with S11, field slices and NF2FF.");
-            if (text.contains(QStringLiteral("radiation")))
-                return QStringLiteral("Display the computed antenna radiation pattern.");
-            if (text.contains(QStringLiteral("near field")))
-                return QStringLiteral("Display the computed near-field slice.");
+            if (text == QStringLiteral("run"))
+                return QStringLiteral("Chạy mô phỏng CAD hiện tại.");
+            if (text == QStringLiteral("solver options"))
+                return QStringLiteral("Tùy chọn solver sẽ được bổ sung sau.");
             return label;
         };
-        const auto makeRibbonPage = [this, ribbon, saveProject,
+        const auto makeRibbonPage = [this, ribbon, saveProject, ribbonButtonSize,
                                       &iconFor, &tooltipFor](
                                         const QString& name,
                                         std::initializer_list<
@@ -1790,6 +1698,166 @@ private:
                         [callback] { callback(); });
                     return arrowButton;
                 };
+            const auto addMenuChoice =
+                [ribbonButtonSize](QMenu* menu, const QString& actionText,
+                                   const QString& buttonText, const QIcon& icon,
+                                   const QString& tooltip,
+                                   const std::function<void()>& callback) {
+                    auto* action = new QWidgetAction(menu);
+                    action->setText(actionText);
+                    action->setIcon(icon);
+                    auto* optionButton = new QToolButton;
+                    optionButton->setText(buttonText);
+                    optionButton->setIcon(icon);
+                    optionButton->setIconSize(QSize(26, 26));
+                    optionButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+                    optionButton->setToolTip(tooltip);
+                    optionButton->setFixedSize(ribbonButtonSize);
+                    optionButton->setAccessibleName(actionText);
+                    optionButton->setAutoRaise(true);
+                    QObject::connect(optionButton, &QToolButton::clicked,
+                                     optionButton, [menu, callback] {
+                                         callback();
+                                         menu->close();
+                                     });
+                    action->setDefaultWidget(optionButton);
+                    menu->addAction(action);
+                };
+            if (name == QStringLiteral("Simulation")) {
+                auto* solverGroup = new QWidget(page);
+                auto* solverLayout = new QHBoxLayout(solverGroup);
+                solverLayout->setContentsMargins(0, 0, 0, 0);
+                solverLayout->setSpacing(0);
+                solverSelectionButton_ = new QToolButton(solverGroup);
+                solverSelectionButton_->setObjectName(
+                    QStringLiteral("solverSelection"));
+                solverSelectionButton_->setText(QStringLiteral("openEMS"));
+                solverSelectionButton_->setIcon(
+                    iconFor(QStringLiteral("Solver Selection")));
+                solverSelectionButton_->setIconSize(QSize(26, 26));
+                solverSelectionButton_->setToolButtonStyle(
+                    Qt::ToolButtonTextUnderIcon);
+                solverSelectionButton_->setPopupMode(
+                    QToolButton::InstantPopup);
+                solverSelectionButton_->setFixedSize(ribbonButtonSize);
+                solverSelectionButton_->setAccessibleName(
+                    QStringLiteral("Solver Selection"));
+                auto* solverMenu = new QMenu(solverSelectionButton_);
+                solverMenu->setObjectName(QStringLiteral("solverMenu"));
+                addMenuChoice(
+                    solverMenu, QStringLiteral("openEMS"),
+                    QStringLiteral("openEMS"),
+                    iconFor(QStringLiteral("Solver Selection")),
+                    QStringLiteral("Chọn solver openEMS."),
+                    [this] {
+                        solverSelectionButton_->setText(QStringLiteral("openEMS"));
+                    });
+                addMenuChoice(
+                    solverMenu, QStringLiteral("MEEP"), QStringLiteral("MEEP"),
+                    iconFor(QStringLiteral("Solver Selection")),
+                    QStringLiteral("Chọn solver MEEP."),
+                    [this] {
+                        solverSelectionButton_->setText(QStringLiteral("MEEP"));
+                    });
+                addMenuChoice(
+                    solverMenu, QStringLiteral("PALACE"),
+                    QStringLiteral("PALACE"),
+                    iconFor(QStringLiteral("Solver Selection")),
+                    QStringLiteral("Chọn solver PALACE."),
+                    [this] {
+                        solverSelectionButton_->setText(QStringLiteral("PALACE"));
+                    });
+                addMenuChoice(
+                    solverMenu, QStringLiteral("NEC2"), QStringLiteral("NEC2"),
+                    iconFor(QStringLiteral("Solver Selection")),
+                    QStringLiteral("Chọn solver NEC2."),
+                    [this] {
+                        solverSelectionButton_->setText(QStringLiteral("NEC2"));
+                    });
+                solverSelectionButton_->setToolTip(
+                    QStringLiteral("Solver Selection — openEMS."));
+                const auto showSolverMenu = [solverMenu, this] {
+                    const int horizontalOffset =
+                        (solverSelectionButton_->width() -
+                         solverMenu->sizeHint().width()) / 2;
+                    solverMenu->popup(solverSelectionButton_->mapToGlobal(
+                        QPoint(horizontalOffset, solverSelectionButton_->height())));
+                };
+                QObject::connect(solverSelectionButton_, &QToolButton::clicked,
+                                 solverSelectionButton_, showSolverMenu);
+                solverLayout->addWidget(solverSelectionButton_);
+                solverLayout->addWidget(makeMenuArrowButton(
+                    solverGroup, QStringLiteral("Solver Selection options"),
+                    QStringLiteral("Select a solver."),
+                    showSolverMenu));
+                layout->addWidget(solverGroup);
+
+                auto* domainGroup = new QWidget(page);
+                auto* domainLayout = new QHBoxLayout(domainGroup);
+                domainLayout->setContentsMargins(0, 0, 0, 0);
+                domainLayout->setSpacing(0);
+                domainSelectionButton_ = new QToolButton(domainGroup);
+                domainSelectionButton_->setObjectName(
+                    QStringLiteral("domainSelection"));
+                domainSelectionButton_->setText(QStringLiteral("Time Domain"));
+                const QIcon timeDomainIcon =
+                    iconFor(QStringLiteral("Time Domain Solver"));
+                const QIcon frequencyDomainIcon =
+                    iconFor(QStringLiteral("Frequency Domain Solver"));
+                domainSelectionButton_->setIcon(timeDomainIcon);
+                domainSelectionButton_->setIconSize(QSize(26, 26));
+                domainSelectionButton_->setToolButtonStyle(
+                    Qt::ToolButtonTextUnderIcon);
+                domainSelectionButton_->setFixedSize(ribbonButtonSize);
+                domainSelectionButton_->setAccessibleName(
+                    QStringLiteral("Domain Selection"));
+                domainSelectionButton_->setToolTip(
+                    QStringLiteral("Domain — Time Domain Solver. "
+                                   "Giải bài toán trong miền thời gian."));
+                auto* domainMenu = new QMenu(domainSelectionButton_);
+                domainMenu->setObjectName(QStringLiteral("domainMenu"));
+                addMenuChoice(
+                    domainMenu, QStringLiteral("Frequency Domain Solver"),
+                    QStringLiteral("Freq. Domain"), frequencyDomainIcon,
+                    QStringLiteral("Frequency Domain Solver — "
+                                   "Giải bài toán trong miền tần số."),
+                    [this, frequencyDomainIcon] {
+                        domainSelectionButton_->setText(
+                            QStringLiteral("Freq. Domain"));
+                        domainSelectionButton_->setIcon(frequencyDomainIcon);
+                        domainSelectionButton_->setToolTip(
+                            QStringLiteral("Domain — Frequency Domain Solver. "
+                                           "Giải bài toán trong miền tần số."));
+                    });
+                addMenuChoice(
+                    domainMenu, QStringLiteral("Time Domain Solver"),
+                    QStringLiteral("Time Domain"), timeDomainIcon,
+                    QStringLiteral("Time Domain Solver — "
+                                   "Giải bài toán trong miền thời gian."),
+                    [this, timeDomainIcon] {
+                        domainSelectionButton_->setText(
+                            QStringLiteral("Time Domain"));
+                        domainSelectionButton_->setIcon(timeDomainIcon);
+                        domainSelectionButton_->setToolTip(
+                            QStringLiteral("Domain — Time Domain Solver. "
+                                           "Giải bài toán trong miền thời gian."));
+                    });
+                const auto showDomainMenu = [domainMenu, this] {
+                    const int horizontalOffset =
+                        (domainSelectionButton_->width() -
+                         domainMenu->sizeHint().width()) / 2;
+                    domainMenu->popup(domainSelectionButton_->mapToGlobal(
+                        QPoint(horizontalOffset, domainSelectionButton_->height())));
+                };
+                QObject::connect(domainSelectionButton_, &QToolButton::clicked,
+                                 domainSelectionButton_, showDomainMenu);
+                domainLayout->addWidget(domainSelectionButton_);
+                domainLayout->addWidget(makeMenuArrowButton(
+                    domainGroup, QStringLiteral("Domain options"),
+                    QStringLiteral("Select a simulation domain."),
+                    showDomainMenu));
+                layout->addWidget(domainGroup);
+            }
             for (const auto& entry : actions) {
                 if (name == QStringLiteral("File") &&
                     entry.first == QStringLiteral("Open Project")) {
@@ -1805,7 +1873,8 @@ private:
                     openButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
                     openButton->setToolTip(tooltipFor(entry.first));
                     openButton->setStatusTip(tooltipFor(entry.first));
-                    openButton->setMinimumSize(86, 76);
+                    openButton->setFixedSize(ribbonButtonSize);
+                    openButton->setAccessibleName(entry.first);
                     openButton->setAutoRaise(true);
                     QObject::connect(openButton, &QToolButton::clicked,
                                      openButton, entry.second);
@@ -1832,7 +1901,8 @@ private:
                     saveButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
                     saveButton->setToolTip(tooltipFor(entry.first));
                     saveButton->setStatusTip(tooltipFor(entry.first));
-                    saveButton->setMinimumSize(86, 76);
+                    saveButton->setFixedSize(ribbonButtonSize);
+                    saveButton->setAccessibleName(entry.first);
                     saveButton->setAutoRaise(true);
                     QObject::connect(saveButton, &QToolButton::clicked,
                                      saveButton, entry.second);
@@ -1840,7 +1910,7 @@ private:
 
                     auto* saveMenu = new QMenu(saveGroup);
                     const auto addSaveOption =
-                        [saveMenu](const QString& text,
+                        [saveMenu, ribbonButtonSize](const QString& text,
                                    QStyle::StandardPixmap icon,
                                    const QString& tooltip,
                                    const std::function<void()>& callback) {
@@ -1853,7 +1923,8 @@ private:
                             optionButton->setToolButtonStyle(
                                 Qt::ToolButtonTextUnderIcon);
                             optionButton->setToolTip(tooltip);
-                            optionButton->setFixedSize(86, 76);
+                            optionButton->setFixedSize(ribbonButtonSize);
+                            optionButton->setAccessibleName(text);
                             optionButton->setAutoRaise(true);
                             QObject::connect(
                                 optionButton, &QToolButton::clicked,
@@ -1894,7 +1965,8 @@ private:
                 button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
                 button->setToolTip(tooltipFor(entry.first));
                 button->setStatusTip(tooltipFor(entry.first));
-                button->setMinimumSize(86, 76);
+                button->setFixedSize(ribbonButtonSize);
+                button->setAccessibleName(entry.first);
                 button->setAutoRaise(true);
                 layout->addWidget(button);
                 QObject::connect(button, &QToolButton::clicked, button, entry.second);
@@ -1925,15 +1997,15 @@ private:
             else if (selected == projectAction) saveProjectAs();
         };
         makeRibbonPage(QStringLiteral("File"), {
-            {QStringLiteral("New Project"), [newProject] { newProject->click(); }},
+            {QStringLiteral("New"), [newProject] { newProject->click(); }},
             {QStringLiteral("Open Project"), [openProject] { openProject->click(); }},
             {QStringLiteral("Save"), [saveProject] { saveProject->click(); }},
             {QStringLiteral("Import"), showImportMenu},
             {QStringLiteral("Export"), showExportMenu},
-            {QStringLiteral("Project Settings"), [this] {
+            {QStringLiteral("Settings"), [this] {
                 workspace_->setCurrentWidget(workspace_->widget(2));
             }},
-            {QStringLiteral("Close Project"), [this] { closeProject(); }},
+            {QStringLiteral("Close"), [this] { closeProject(); }},
             {QStringLiteral("Exit"), [this] { close(); }}
         });
         makeRibbonPage(QStringLiteral("Modeling"), {
@@ -1943,7 +2015,7 @@ private:
             {QStringLiteral("Draw Curve"), [drawCurve] { drawCurve->click(); }},
             {QStringLiteral("Draw Plate"), [drawPlate] { drawPlate->click(); }},
             {QStringLiteral("Draw Box"), [drawBox] { drawBox->click(); }},
-            {QStringLiteral("Top / 3D View"), [topView] { topView->click(); }},
+            {QStringLiteral("3D View"), [topView] { topView->click(); }},
             {QStringLiteral("Import STEP"), [importStep] { importStep->click(); }},
             {QStringLiteral("Fuse"), [fuse] { fuse->click(); }},
             {QStringLiteral("Cut"), [cut] { cut->click(); }},
@@ -1953,15 +2025,11 @@ private:
             {QStringLiteral("Export STEP"), [exportStep] { exportStep->click(); }}
         });
         makeRibbonPage(QStringLiteral("Simulation"), {
-            {QStringLiteral("Run CAD Solver"), [this] { runButton_->click(); }},
-            {QStringLiteral("Run WR90 TE10"), [this] { wr90Button_->click(); }},
-            {QStringLiteral("Run Patch Antenna"), [antenna] { antenna->click(); }},
-            {QStringLiteral("CPU / GPU"), [this] {
-                workspace_->setCurrentWidget(workspace_->widget(2));
-            }}
+            {QStringLiteral("Run"), [this] { runButton_->click(); }},
+            {QStringLiteral("Solver Options"), [] {}}
         });
         makeRibbonPage(QStringLiteral("Results"), {
-            {QStringLiteral("S-Parameters"), [this] {
+            {QStringLiteral("S-Params"), [this] {
                 workspace_->setCurrentWidget(resultsPage_);
                 resultPlots_->setCurrentWidget(s11Plot_);
             }},
@@ -1973,28 +2041,16 @@ private:
                 workspace_->setCurrentWidget(resultsPage_);
                 resultPlots_->setCurrentWidget(wavePlot_);
             }},
-            {QStringLiteral("Radiation Pattern"), [this] {
-                workspace_->setCurrentWidget(resultsPage_);
-                resultPlots_->setCurrentWidget(farFieldPlot_);
-            }},
-            {QStringLiteral("Near Field E"), [this] {
-                workspace_->setCurrentWidget(resultsPage_);
-                resultPlots_->setCurrentWidget(nearFieldEMap_);
-            }},
-            {QStringLiteral("Near Field H"), [this] {
-                workspace_->setCurrentWidget(resultsPage_);
-                resultPlots_->setCurrentWidget(nearFieldHMap_);
-            }},
-            {QStringLiteral("Open Results Folder"), [openResults] { openResults->click(); }}
+            {QStringLiteral("Results Folder"), [openResults] { openResults->click(); }}
         });
         makeRibbonPage(QStringLiteral("View"), {
-            {QStringLiteral("Top / 3D View"), [topView] { topView->click(); }},
-            {QStringLiteral("Reference Grid"), [grid] { grid->click(); }},
+            {QStringLiteral("3D View"), [topView] { topView->click(); }},
+            {QStringLiteral("Grid"), [grid] { grid->click(); }},
             {QStringLiteral("Fit Camera"), [fitView] { fitView->click(); }},
-            {QStringLiteral("Navigation Tree"), [this] {
+            {QStringLiteral("Navigation"), [this] {
                 if (navigationDock_) navigationDock_->toggleViewAction()->trigger();
             }},
-            {QStringLiteral("Parameters / Messages"), [this] {
+            {QStringLiteral("Parameters"), [this] {
                 if (analysisPanelAction_) analysisPanelAction_->trigger();
             }}
         });
@@ -2038,9 +2094,6 @@ private:
         auto* runCadAction = homeMenu->addAction(iconFor(QStringLiteral("Run CAD")),
                                                  QStringLiteral("Run CAD simulation"));
         connect(runCadAction, &QAction::triggered, runButton_, &QPushButton::click);
-        auto* runGuideAction = homeMenu->addAction(iconFor(QStringLiteral("Run WR90")),
-                                                   QStringLiteral("Run WR90 reference"));
-        connect(runGuideAction, &QAction::triggered, wr90Button_, &QPushButton::click);
         auto* modelingMenu = menuBar()->addMenu(QStringLiteral("Modeling"));
         auto* addPlateAction = modelingMenu->addAction(iconFor(QStringLiteral("Add Plate")),
                                                        QStringLiteral("Add plate"));
@@ -2061,12 +2114,6 @@ private:
         auto* solverAction = simulationMenu->addAction(iconFor(QStringLiteral("Run CAD")),
                                                        QStringLiteral("Run CAD solver"));
         connect(solverAction, &QAction::triggered, runButton_, &QPushButton::click);
-        auto* wr90Action = simulationMenu->addAction(iconFor(QStringLiteral("Run WR90")),
-                                                     QStringLiteral("Run WR90 reference"));
-        connect(wr90Action, &QAction::triggered, wr90Button_, &QPushButton::click);
-        auto* patchAction = simulationMenu->addAction(iconFor(QStringLiteral("Antenna")),
-                                                      QStringLiteral("Run Patch Antenna"));
-        connect(patchAction, &QAction::triggered, antenna, &QPushButton::click);
         auto* postMenu = menuBar()->addMenu(QStringLiteral("Post-Processing"));
         postMenu->addAction(iconFor(QStringLiteral("Results")),
                             QStringLiteral("Show Results"), this, [this] {
@@ -2112,7 +2159,7 @@ private:
             QMessageBox::information(
                 this, QStringLiteral("About RF Simulation"),
                 QStringLiteral("RF Simulation prototype\nQt + Open CASCADE + openEMS\n"
-                               "Supports CAD lumped-port and reference WR90/patch workflows."));
+                               "Supports CAD geometry and lumped-port workflows."));
         });
 
         auto* shell = new QWidget;
@@ -2215,68 +2262,6 @@ private:
         setProjectCanvasAppearance(false);
     }
 
-    bool loadWr90Results(const QString& directory) {
-        const QString sParameters = directory + QStringLiteral("/s_parameters_wr90.csv");
-        const QString vswr = directory + QStringLiteral("/vswr_wr90.csv");
-        const QString waveform = directory + QStringLiteral("/waveform_wr90.csv");
-        if (!QFileInfo::exists(sParameters) || !QFileInfo::exists(vswr) ||
-            !QFileInfo::exists(waveform)) {
-            return false;
-        }
-        resultDirectory_ = QFileInfo(directory).absoluteFilePath();
-        wr90Run_ = true;
-        antennaRun_ = false;
-        parameterModel_ = QStringLiteral("WR90 %1").arg(waveguideMode_->currentText());
-        view_->setWaveguideReference(true);
-        farFieldPlot_->clear();
-        nearFieldEMap_->clear();
-        nearFieldHMap_->clear();
-        s11Plot_->loadCsv(sParameters, 0, 1, 1e-9, 1.0, 2,
-                          QStringLiteral("S11"), QStringLiteral("S21"));
-        vswrPlot_->loadCsv(vswr, 0, 1, 1e-9, 1.0, 2,
-                           QStringLiteral("Port 1"), QStringLiteral("Port 2"));
-        wavePlot_->loadCsv(waveform, 0, 1, 1e9, 1.0);
-        status_->setText(QStringLiteral("WR90 results loaded from %1").arg(resultDirectory_));
-        loadWr90ParameterSummary(resultDirectory_);
-        statusBar()->showMessage(QStringLiteral("WR90 results loaded — S11/S21, VSWR, waveform"));
-        workspace_->setCurrentWidget(resultsPage_);
-        refreshList(currentObjectIndex());
-        return true;
-    }
-
-    bool loadAntennaResults(const QString& directory) {
-        const QString s11 = directory + QStringLiteral("/s11_antenna.csv");
-        const QString farField = directory + QStringLiteral("/far_field_antenna.csv");
-        const QString nearField = directory + QStringLiteral("/near_field_antenna.csv");
-        if (!QFileInfo::exists(s11) || !QFileInfo::exists(farField) ||
-            !QFileInfo::exists(nearField)) {
-            return false;
-        }
-        resultDirectory_ = QFileInfo(directory).absoluteFilePath();
-        wr90Run_ = false;
-        antennaRun_ = true;
-        parameterModel_ = QStringLiteral("Patch antenna reference");
-        updateParameterList();
-        view_->setWaveguideReference(false);
-        view_->setAntennaReference(true);
-        s11Plot_->loadCsv(s11, 0, 1, 1e-9, 1.0,
-                          -1, QStringLiteral("S11"), QString());
-        vswrPlot_->loadCsv(s11, 0, 2, 1e-9, 1.0,
-                           -1, QStringLiteral("VSWR"), QString());
-        wavePlot_->clear();
-        farFieldPlot_->loadCsv(farField, 0, 1, 1.0, 1.0, 2,
-                               QStringLiteral("Phi 0°"), QStringLiteral("Phi 90°"));
-        nearFieldEMap_->loadCsv(nearField, 0, 1, 2);
-        nearFieldHMap_->loadCsv(nearField, 0, 1, 3);
-        status_->setText(QStringLiteral("Patch antenna results loaded from %1")
-                             .arg(resultDirectory_));
-        statusBar()->showMessage(
-            QStringLiteral("Antenna results loaded — S11, near field E/H, radiation pattern"));
-        workspace_->setCurrentWidget(resultsPage_);
-        refreshList(currentObjectIndex());
-        return true;
-    }
-
     void beginRectangleDrawing(rfsim::SolidKind kind) {
         topViewEnabled_ = true;
         workspace_->setCurrentWidget(workspace_->widget(0));
@@ -2377,16 +2362,6 @@ private:
                              portStopY_->value(), portStopZ_->value());
     }
 
-    void updateReferenceGeometry() {
-        view_->setWaveguideDimensions(
-            waveguideWidth_->value(), waveguideHeight_->value(),
-            waveguideLength_->value(), waveguidePortDepth_->value());
-        view_->setAntennaDimensions(
-            antennaSubstrateWidth_->value(), antennaSubstrateLength_->value(),
-            antennaSubstrateThickness_->value(), antennaPatchWidth_->value(),
-            antennaPatchLength_->value(), antennaFeedPosition_->value());
-    }
-
     QString createTemporaryResultsDirectory(QString* error) {
         auto directory = std::make_unique<QTemporaryDir>(
             QDir::tempPath() + QStringLiteral("/rf-simulation-XXXXXX"));
@@ -2419,50 +2394,24 @@ private:
                portStartY_->value() == portStopY_->value();
     }
 
-    void loadWr90ParameterSummary(const QString& directory) {
-        QFile summary(directory + QStringLiteral("/summary_wr90.json"));
-        if (!summary.open(QIODevice::ReadOnly)) return;
-        const QJsonObject data =
-            QJsonDocument::fromJson(summary.readAll()).object();
-        parameterModel_ = QStringLiteral("WR90 %1").arg(
-            data.value("mode").toString(QStringLiteral("TE10")));
-        waveguideMode_->setCurrentText(
-            data.value("mode").toString(QStringLiteral("TE10")));
-        waveguideFrequencyStart_->setValue(
-            data.value("frequency_start_hz").toDouble() / 1e9);
-        waveguideFrequencyStop_->setValue(
-            data.value("frequency_stop_hz").toDouble() / 1e9);
-        meshDivisions_->setValue(
-            data.value("mesh_divisions_per_wavelength").toInt());
-        maxTimesteps_->setValue(data.value("timesteps_limit").toInt());
-        updateParameterList();
-    }
-
     void updateParameterList() {
-        const QString start = QString::number(
-            parameterModel_.startsWith(QStringLiteral("WR90"))
-                ? waveguideFrequencyStart_->value()
-                : frequencyStart_->value(), 'g', 6);
-        const QString stop = QString::number(
-            parameterModel_.startsWith(QStringLiteral("WR90"))
-                ? waveguideFrequencyStop_->value()
-                : frequencyStop_->value(), 'g', 6);
-        const QString portExpression = parameterModel_.startsWith(QStringLiteral("WR90"))
-            ? QStringLiteral("2 modal %1 ports").arg(waveguideMode_->currentText())
-            : QStringLiteral("%1: (%2,%3,%4) → (%5,%6,%7) mm")
-                  .arg(portDirection_->currentData().toString())
-                  .arg(portStartX_->value()).arg(portStartY_->value())
-                  .arg(portStartZ_->value()).arg(portStopX_->value())
-                  .arg(portStopY_->value()).arg(portStopZ_->value());
-        const QString portValue = parameterModel_.startsWith(QStringLiteral("WR90"))
-            ? QStringLiteral("%1 %2 GHz")
-                  .arg(waveguideMode_->currentText(), start)
-            : QStringLiteral("%1, %2 Ω")
-                  .arg(portDirection_->currentData().toString())
-                  .arg(portImpedance_->value());
+        const QString start =
+            QString::number(frequencyStart_->value(), 'g', 6);
+        const QString stop =
+            QString::number(frequencyStop_->value(), 'g', 6);
+        const QString portExpression =
+            QStringLiteral("%1: (%2,%3,%4) → (%5,%6,%7) mm")
+                .arg(portDirection_->currentData().toString())
+                .arg(portStartX_->value()).arg(portStartY_->value())
+                .arg(portStartZ_->value()).arg(portStopX_->value())
+                .arg(portStopY_->value()).arg(portStopZ_->value());
+        const QString portValue =
+            QStringLiteral("%1, %2 Ω")
+                .arg(portDirection_->currentData().toString())
+                .arg(portImpedance_->value());
         const std::array<QStringList, 8> rows = {{
             {QStringLiteral("model"), parameterModel_, parameterModel_,
-             QString(), QStringLiteral("Active reference or CAD scene")},
+             QString(), QStringLiteral("Active CAD scene")},
             {QStringLiteral("frequency_start"), start, start, QStringLiteral("GHz"),
              QStringLiteral("Sweep lower bound")},
             {QStringLiteral("frequency_stop"), stop, stop, QStringLiteral("GHz"),
@@ -2483,7 +2432,7 @@ private:
              boundary_->currentData().toString(), QString(),
              QStringLiteral("OpenEMS boundary condition")},
             {QStringLiteral("port"), portExpression, portValue, QString(),
-             QStringLiteral("Configured lumped or reference modal ports")}
+             QStringLiteral("Configured lumped port")}
         }};
         for (int row = 0; row < static_cast<int>(rows.size()); ++row) {
             for (int column = 0; column < rows[row].size(); ++column) {
@@ -2539,58 +2488,38 @@ private:
         projectResultsTempDir_.reset();
         simulationResultsTempDir_.reset();
         solverFiles_.clear();
+        projectResultFiles_.clear();
+        resultKind_ = QStringLiteral("none");
+        projectSimulationSettings_ = {};
         geometryHistory_.clear();
         geometryParameters_.clear();
         geometryMaterials_.clear();
-        wr90Run_ = false;
-        antennaRun_ = false;
         parameterModel_ = QStringLiteral("CAD project");
         s11Plot_->clear();
         vswrPlot_->clear();
         wavePlot_->clear();
-        farFieldPlot_->clear();
-        nearFieldEMap_->clear();
-        nearFieldHMap_->clear();
         view_->setDrawMode({});
         topViewEnabled_ = false;
         workspace_->setCurrentWidget(workspace_->widget(0));
         refreshList(-1);
         parameterModel_ = QStringLiteral("CAD scene");
-        updateParameterList();
         loadSelected();
         loadSelectedMaterial();
         frequencyStart_->setValue(1.0);
-        frequencyStop_->setValue(3.0);
+        frequencyStop_->setValue(2.0);
         frequencyPoints_->setValue(201);
         meshDivisions_->setValue(30);
-        maxTimesteps_->setValue(30000);
+        maxTimesteps_->setValue(20000);
         boundary_->setCurrentIndex(0);
         portDirection_->setCurrentIndex(portDirection_->findData(QStringLiteral("z")));
-        portStartX_->setValue(-2.0);
-        portStartY_->setValue(10.0);
-        portStartZ_->setValue(-1.0);
-        portStopX_->setValue(-2.0);
-        portStopY_->setValue(10.0);
-        portStopZ_->setValue(2.6);
+        portStartX_->setValue(0.0);
+        portStartY_->setValue(0.0);
+        portStartZ_->setValue(0.0);
+        portStopX_->setValue(0.0);
+        portStopY_->setValue(0.0);
+        portStopZ_->setValue(1.0);
         portImpedance_->setValue(50.0);
-        waveguideMode_->setCurrentText(QStringLiteral("TE10"));
-        waveguideFrequencyStart_->setValue(8.2);
-        waveguideFrequencyStop_->setValue(12.4);
-        waveguideWidth_->setValue(22.86);
-        waveguideHeight_->setValue(10.16);
-        waveguideLength_->setValue(100.0);
-        waveguidePortDepth_->setValue(5.0);
-        antennaSubstrateWidth_->setValue(60.0);
-        antennaSubstrateLength_->setValue(60.0);
-        antennaSubstrateThickness_->setValue(1.524);
-        antennaPatchWidth_->setValue(32.0);
-        antennaPatchLength_->setValue(40.0);
-        antennaFeedPosition_->setValue(-6.0);
-        antennaRelativePermittivity_->setValue(3.38);
-        antennaConductivity_->setValue(0.0);
-        antennaLossTangent_->setValue(0.0);
-        updateReferenceGeometry();
-        view_->setWaveguideReference(false);
+        updateParameterList();
         setProjectCanvasAppearance(false);
     }
 
@@ -2708,25 +2637,7 @@ private:
         project.materials = geometryMaterials_;
         project.featureHistory = geometryHistory_;
         project.solverFiles = solverFiles_;
-        project.parameters.erase(
-            std::remove_if(project.parameters.begin(), project.parameters.end(),
-                           [](const rfsim::OemParameter& parameter) {
-                               return parameter.id.startsWith(QStringLiteral("p-model-"));
-                           }),
-            project.parameters.end());
-        project.materials.erase(
-            std::remove_if(project.materials.begin(), project.materials.end(),
-                           [](const rfsim::OemMaterial& material) {
-                               return material.id.startsWith(QStringLiteral("mat-model-"));
-                           }),
-            project.materials.end());
-        project.featureHistory.erase(
-            std::remove_if(project.featureHistory.begin(),
-                           project.featureHistory.end(),
-                           [](const rfsim::OemFeature& feature) {
-                               return feature.id.startsWith(QStringLiteral("model-"));
-                           }),
-            project.featureHistory.end());
+        project.simulation = projectSimulationSettings_;
         auto& simulation = project.simulation;
         simulation.frequencyStartGHz = frequencyStart_->value();
         simulation.frequencyStopGHz = frequencyStop_->value();
@@ -2743,141 +2654,8 @@ private:
         simulation.portStopZmm = portStopZ_->value();
         simulation.portImpedanceOhm = portImpedance_->value();
         simulation.engine = engine_->currentData().toString();
-        simulation.waveguideMode = waveguideMode_->currentText();
-        simulation.waveguideFrequencyStartGHz = waveguideFrequencyStart_->value();
-        simulation.waveguideFrequencyStopGHz = waveguideFrequencyStop_->value();
-        simulation.waveguideWidthMm = waveguideWidth_->value();
-        simulation.waveguideHeightMm = waveguideHeight_->value();
-        simulation.waveguideLengthMm = waveguideLength_->value();
-        simulation.waveguidePortDepthMm = waveguidePortDepth_->value();
-        simulation.antennaSubstrateWidthMm = antennaSubstrateWidth_->value();
-        simulation.antennaSubstrateLengthMm = antennaSubstrateLength_->value();
-        simulation.antennaSubstrateThicknessMm = antennaSubstrateThickness_->value();
-        simulation.antennaPatchWidthMm = antennaPatchWidth_->value();
-        simulation.antennaPatchLengthMm = antennaPatchLength_->value();
-        simulation.antennaFeedPositionMm = antennaFeedPosition_->value();
-        simulation.antennaRelativePermittivity =
-            antennaRelativePermittivity_->value();
-        simulation.antennaConductivitySPerM = antennaConductivity_->value();
-        simulation.antennaLossTangent = antennaLossTangent_->value();
-
-        const auto addMaterial = [&](const QString& id, const QString& name,
-                                     const QString& type, double permittivity,
-                                     double conductivity, double lossTangent) {
-            const auto existing = std::find_if(
-                project.materials.begin(), project.materials.end(),
-                [&id](const rfsim::OemMaterial& item) { return item.id == id; });
-            if (existing == project.materials.end()) {
-                project.materials.push_back(
-                    {id, name, type, permittivity, conductivity, lossTangent});
-            }
-        };
-        addMaterial(QStringLiteral("mat-model-waveguide-wall"),
-                    QStringLiteral("Waveguide wall"), QStringLiteral("pec"),
-                    1.0, 0.0, 0.0);
-        addMaterial(QStringLiteral("mat-model-antenna-metal"),
-                    QStringLiteral("Antenna metal"), QStringLiteral("pec"),
-                    1.0, 0.0, 0.0);
-        addMaterial(QStringLiteral("mat-model-antenna-substrate"),
-                    QStringLiteral("Antenna substrate"),
-                    QStringLiteral("dielectric"),
-                    simulation.antennaRelativePermittivity,
-                    simulation.antennaConductivitySPerM,
-                    simulation.antennaLossTangent);
-
-        const auto addParameter = [&](const QString& id, const QString& name,
-                                      const QString& unit, double value) {
-            rfsim::OemParameter parameter;
-            parameter.id = id;
-            parameter.name = name;
-            parameter.unit = unit;
-            parameter.expression = QString::number(value, 'g', 17);
-            parameter.evaluatedValue = value;
-            project.parameters.push_back(parameter);
-            return id;
-        };
-        const auto newModelFeature = [&](const QString& id, const QString& type,
-                                         const QString& materialRef,
-                                         const QStringList& inputs = QStringList()) {
-            rfsim::OemFeature feature;
-            feature.id = id;
-            feature.type = type;
-            feature.outputId = id;
-            feature.outputKind = QStringLiteral("solver-model");
-            feature.materialRef = materialRef;
-            feature.inputs = inputs;
-            project.featureHistory.push_back(std::move(feature));
-        };
-        const auto addModelArgument = [&](const QString& featureId,
-                                          const QString& name,
-                                          const QString& unit, double value) {
-            const QString parameterId =
-                addParameter(QStringLiteral("p-%1-%2").arg(featureId, name),
-                             QStringLiteral("%1.%2").arg(featureId, name),
-                             unit, value);
-            auto feature = std::find_if(
-                project.featureHistory.begin(), project.featureHistory.end(),
-                [&featureId](const rfsim::OemFeature& item) {
-                    return item.id == featureId;
-                });
-            if (feature == project.featureHistory.end()) {
-                throw std::runtime_error("Internal error while creating model parameters.");
-            }
-            const QString expression = QString::number(value, 'g', 17);
-            feature->arguments.push_back(
-                {name, expression, parameterId, unit, value});
-        };
-        newModelFeature(QStringLiteral("model-waveguide"),
-                        QStringLiteral("waveguide.rectangular"),
-                        QStringLiteral("mat-model-waveguide-wall"));
-        addModelArgument(QStringLiteral("model-waveguide"),
-                         QStringLiteral("width-a"), QStringLiteral("mm"),
-                         simulation.waveguideWidthMm);
-        addModelArgument(QStringLiteral("model-waveguide"),
-                         QStringLiteral("height-b"), QStringLiteral("mm"),
-                         simulation.waveguideHeightMm);
-        addModelArgument(QStringLiteral("model-waveguide"),
-                         QStringLiteral("length"), QStringLiteral("mm"),
-                         simulation.waveguideLengthMm);
-        addModelArgument(QStringLiteral("model-waveguide"),
-                         QStringLiteral("port-depth"), QStringLiteral("mm"),
-                         simulation.waveguidePortDepthMm);
-
-        newModelFeature(QStringLiteral("model-antenna-substrate"),
-                        QStringLiteral("primitive.box"),
-                        QStringLiteral("mat-model-antenna-substrate"));
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("width"), QStringLiteral("mm"),
-                         simulation.antennaSubstrateWidthMm);
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("length"), QStringLiteral("mm"),
-                         simulation.antennaSubstrateLengthMm);
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("thickness"), QStringLiteral("mm"),
-                         simulation.antennaSubstrateThicknessMm);
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("relative-permittivity"), QStringLiteral("1"),
-                         simulation.antennaRelativePermittivity);
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("conductivity"), QStringLiteral("S/m"),
-                         simulation.antennaConductivitySPerM);
-        addModelArgument(QStringLiteral("model-antenna-substrate"),
-                         QStringLiteral("loss-tangent"), QStringLiteral("1"),
-                         simulation.antennaLossTangent);
-
-        newModelFeature(QStringLiteral("model-antenna-patch"),
-                        QStringLiteral("primitive.box"),
-                        QStringLiteral("mat-model-antenna-metal"),
-                        {QStringLiteral("model-antenna-substrate")});
-        addModelArgument(QStringLiteral("model-antenna-patch"),
-                         QStringLiteral("width"), QStringLiteral("mm"),
-                         simulation.antennaPatchWidthMm);
-        addModelArgument(QStringLiteral("model-antenna-patch"),
-                         QStringLiteral("length"), QStringLiteral("mm"),
-                         simulation.antennaPatchLengthMm);
-        addModelArgument(QStringLiteral("model-antenna-patch"),
-                         QStringLiteral("feed-position"), QStringLiteral("mm"),
-                         simulation.antennaFeedPositionMm);
+        project.resultKind = resultKind_;
+        project.resultFiles = projectResultFiles_;
 
         const auto readAsset = [&](const QString& filePath, QByteArray* data) {
             QFile file(filePath);
@@ -2898,44 +2676,33 @@ private:
             }
             return true;
         };
-        if (!resultDirectory_.isEmpty() && QFileInfo(resultDirectory_).isDir()) {
-            project.resultKind = wr90Run_
-                                     ? QStringLiteral("waveguide")
-                                     : antennaRun_ ? QStringLiteral("antenna")
-                                                   : QStringLiteral("cad");
-            const QStringList requiredFiles =
-                project.resultKind == QStringLiteral("waveguide")
-                    ? QStringList{QStringLiteral("s_parameters_wr90.csv"),
-                                  QStringLiteral("s_parameters_wr90.s2p"),
-                                  QStringLiteral("vswr_wr90.csv"),
-                                  QStringLiteral("waveform_wr90.csv")}
-                    : project.resultKind == QStringLiteral("antenna")
-                          ? QStringList{QStringLiteral("s11_antenna.csv"),
-                                        QStringLiteral("s11_antenna.s1p"),
-                                        QStringLiteral("far_field_antenna.csv"),
-                                        QStringLiteral("near_field_antenna.csv")}
-                          : QStringList{QStringLiteral("s11_scene.csv"),
-                                        QStringLiteral("s11_scene.s1p"),
-                                        QStringLiteral("waveform_scene.csv")};
-            for (const auto& required : requiredFiles) {
-                if (!QFileInfo::exists(
-                        QDir(resultDirectory_).filePath(required))) {
-                    project.resultKind = QStringLiteral("none");
-                    break;
-                }
-            }
-            if (project.resultKind != QStringLiteral("none")) {
-                for (const QString& required : requiredFiles) {
+
+        if (resultKind_ == QStringLiteral("cad") &&
+            !resultDirectory_.isEmpty() && QFileInfo(resultDirectory_).isDir()) {
+            const QStringList requiredFiles = {
+                QStringLiteral("s11_scene.csv"),
+                QStringLiteral("s11_scene.s1p"),
+                QStringLiteral("waveform_scene.csv")
+            };
+            const bool resultsComplete = std::all_of(
+                requiredFiles.cbegin(), requiredFiles.cend(),
+                [this](const QString& name) {
+                    return QFileInfo::exists(
+                        QDir(resultDirectory_).filePath(name));
+                });
+            if (resultsComplete) {
+                project.resultFiles.clear();
+                for (const QString& name : requiredFiles) {
                     QByteArray data;
-                    if (!readAsset(QDir(resultDirectory_).filePath(required), &data)) {
+                    if (!readAsset(QDir(resultDirectory_).filePath(name), &data)) {
                         return false;
                     }
-                    project.resultFiles.insert(required, data);
+                    project.resultFiles.insert(name, data);
                 }
                 const QDir resultRoot(resultDirectory_);
-                const QStringList summaries =
-                    resultRoot.entryList({QStringLiteral("summary*.json")},
-                                         QDir::Files | QDir::NoDotAndDotDot);
+                const QStringList summaries = resultRoot.entryList(
+                    {QStringLiteral("summary*.json")},
+                    QDir::Files | QDir::NoDotAndDotDot);
                 for (const QString& summary : summaries) {
                     QByteArray data;
                     if (!readAsset(resultRoot.filePath(summary), &data)) return false;
@@ -2952,13 +2719,18 @@ private:
                     }
                     QJsonObject summaryObject = document.object();
                     summaryObject.remove(QStringLiteral("simulation_directories"));
-                    summaryObject.remove(QStringLiteral("antenna_field_outputs"));
                     summaryObject.insert(QStringLiteral("raw_field_dumps_in_oem"), false);
-                    data = QJsonDocument(summaryObject).toJson(QJsonDocument::Indented);
-                    project.resultFiles.insert(summary, data);
+                    project.resultFiles.insert(
+                        summary,
+                        QJsonDocument(summaryObject).toJson(QJsonDocument::Indented));
                 }
+            } else {
+                project.resultKind = QStringLiteral("none");
+                project.resultFiles.clear();
             }
+        }
 
+        if (!resultDirectory_.isEmpty() && QFileInfo(resultDirectory_).isDir()) {
             const QString modelsPath = QDir(resultDirectory_).filePath(
                 QStringLiteral("models"));
             if (QFileInfo(modelsPath).isDir()) {
@@ -3025,141 +2797,56 @@ private:
                 }
             }
             stagedResultPath = stagedResults->path();
-            const QStringList requiredFiles =
-                project.resultKind == QStringLiteral("waveguide")
-                    ? QStringList{QStringLiteral("s_parameters_wr90.csv"),
-                                  QStringLiteral("s_parameters_wr90.s2p"),
-                                  QStringLiteral("vswr_wr90.csv"),
-                                  QStringLiteral("waveform_wr90.csv")}
-                    : project.resultKind == QStringLiteral("antenna")
-                          ? QStringList{QStringLiteral("s11_antenna.csv"),
-                                        QStringLiteral("s11_antenna.s1p"),
-                                        QStringLiteral("far_field_antenna.csv"),
-                                        QStringLiteral("near_field_antenna.csv")}
-                          : QStringList{QStringLiteral("s11_scene.csv"),
-                                        QStringLiteral("s11_scene.s1p"),
-                                        QStringLiteral("waveform_scene.csv")};
-            for (const auto& required : requiredFiles) {
-                if (!QFileInfo::exists(stagedResults->filePath(required))) {
-                    if (error) {
-                        *error = QStringLiteral("Project is missing required result data: %1")
-                                     .arg(required);
-                    }
-                    return false;
-                }
-            }
         }
 
-        const auto& simulation = project.simulation;
+        projectSimulationSettings_ = project.simulation;
         objects_ = std::move(project.solids);
-        frequencyStart_->setValue(simulation.frequencyStartGHz);
-        frequencyStop_->setValue(simulation.frequencyStopGHz);
-        frequencyPoints_->setValue(simulation.frequencyPoints);
-        meshDivisions_->setValue(simulation.meshDivisions);
-        maxTimesteps_->setValue(simulation.maximumTimesteps);
-        boundary_->setCurrentIndex(boundary_->findData(simulation.boundary));
-        portDirection_->setCurrentIndex(portDirection_->findData(simulation.portAxis));
-        portStartX_->setValue(simulation.portStartXmm);
-        portStartY_->setValue(simulation.portStartYmm);
-        portStartZ_->setValue(simulation.portStartZmm);
-        portStopX_->setValue(simulation.portStopXmm);
-        portStopY_->setValue(simulation.portStopYmm);
-        portStopZ_->setValue(simulation.portStopZmm);
-        portImpedance_->setValue(simulation.portImpedanceOhm);
-        engine_->setCurrentIndex(engine_->findData(simulation.engine));
-        waveguideMode_->setCurrentText(simulation.waveguideMode);
-        waveguideFrequencyStart_->setValue(simulation.waveguideFrequencyStartGHz);
-        waveguideFrequencyStop_->setValue(simulation.waveguideFrequencyStopGHz);
-        waveguideWidth_->setValue(simulation.waveguideWidthMm);
-        waveguideHeight_->setValue(simulation.waveguideHeightMm);
-        waveguideLength_->setValue(simulation.waveguideLengthMm);
-        waveguidePortDepth_->setValue(simulation.waveguidePortDepthMm);
-        antennaSubstrateWidth_->setValue(simulation.antennaSubstrateWidthMm);
-        antennaSubstrateLength_->setValue(simulation.antennaSubstrateLengthMm);
-        antennaSubstrateThickness_->setValue(simulation.antennaSubstrateThicknessMm);
-        antennaPatchWidth_->setValue(simulation.antennaPatchWidthMm);
-        antennaPatchLength_->setValue(simulation.antennaPatchLengthMm);
-        antennaFeedPosition_->setValue(simulation.antennaFeedPositionMm);
-        antennaRelativePermittivity_->setValue(
-            simulation.antennaRelativePermittivity);
-        antennaConductivity_->setValue(simulation.antennaConductivitySPerM);
-        antennaLossTangent_->setValue(simulation.antennaLossTangent);
-        updateReferenceGeometry();
+        frequencyStart_->setValue(project.simulation.frequencyStartGHz);
+        frequencyStop_->setValue(project.simulation.frequencyStopGHz);
+        frequencyPoints_->setValue(project.simulation.frequencyPoints);
+        meshDivisions_->setValue(project.simulation.meshDivisions);
+        maxTimesteps_->setValue(project.simulation.maximumTimesteps);
+        boundary_->setCurrentIndex(boundary_->findData(project.simulation.boundary));
+        portDirection_->setCurrentIndex(
+            portDirection_->findData(project.simulation.portAxis));
+        portStartX_->setValue(project.simulation.portStartXmm);
+        portStartY_->setValue(project.simulation.portStartYmm);
+        portStartZ_->setValue(project.simulation.portStartZmm);
+        portStopX_->setValue(project.simulation.portStopXmm);
+        portStopY_->setValue(project.simulation.portStopYmm);
+        portStopZ_->setValue(project.simulation.portStopZmm);
+        portImpedance_->setValue(project.simulation.portImpedanceOhm);
+        engine_->setCurrentIndex(engine_->findData(project.simulation.engine));
 
-        resultDirectory_.clear();
-        wr90Run_ = false;
-        antennaRun_ = false;
+        resultDirectory_ = stagedResultPath;
+        resultKind_ = project.resultKind;
+        projectResultFiles_ = project.resultFiles;
         parameterModel_ = QStringLiteral("CAD scene");
         s11Plot_->clear();
         vswrPlot_->clear();
         wavePlot_->clear();
-        farFieldPlot_->clear();
-        nearFieldEMap_->clear();
-        nearFieldHMap_->clear();
-        view_->setWaveguideReference(false);
-        view_->setAntennaReference(false);
         view_->setDrawMode({});
         view_->setTopView(false);
         topViewEnabled_ = false;
         refreshList(objects_.empty() ? -1 : 0);
         loadSelected();
         loadSelectedMaterial();
-        workspace_->setCurrentWidget(workspace_->widget(0));
-        if (project.resultKind == QStringLiteral("waveguide")) {
-            if (!loadWr90Results(stagedResultPath)) {
-                if (error) *error = QStringLiteral("Cannot load waveguide project results.");
-                return false;
-            }
-        } else if (project.resultKind == QStringLiteral("antenna")) {
-            if (!loadAntennaResults(stagedResultPath)) {
-                if (error) *error = QStringLiteral("Cannot load antenna project results.");
-                return false;
-            }
-        } else if (project.resultKind == QStringLiteral("cad")) {
-            resultDirectory_ = stagedResultPath;
+        updatePortVisualization();
+        updateParameterList();
+        if (resultKind_ == QStringLiteral("cad") &&
+            QFileInfo::exists(stagedResults
+                                  ? stagedResults->filePath(QStringLiteral("s11_scene.csv"))
+                                  : QString()) &&
+            QFileInfo::exists(stagedResults
+                                  ? stagedResults->filePath(QStringLiteral("waveform_scene.csv"))
+                                  : QString())) {
             s11Plot_->loadCsv(resultDirectory_ + QStringLiteral("/s11_scene.csv"),
                               0, 3, 1e-9, 1.0);
             wavePlot_->loadCsv(resultDirectory_ + QStringLiteral("/waveform_scene.csv"),
                                0, 1, 1e9, 1.0, 2);
-            status_->setText(QStringLiteral("CAD simulation results loaded."));
-            statusBar()->showMessage(QStringLiteral("CAD results loaded from project"));
-            workspace_->setCurrentWidget(resultsPage_);
-            refreshList(currentObjectIndex());
+            status_->setText(QStringLiteral("Project results loaded."));
         }
-        frequencyStart_->setValue(simulation.frequencyStartGHz);
-        frequencyStop_->setValue(simulation.frequencyStopGHz);
-        frequencyPoints_->setValue(simulation.frequencyPoints);
-        meshDivisions_->setValue(simulation.meshDivisions);
-        maxTimesteps_->setValue(simulation.maximumTimesteps);
-        boundary_->setCurrentIndex(boundary_->findData(simulation.boundary));
-        portDirection_->setCurrentIndex(portDirection_->findData(simulation.portAxis));
-        portStartX_->setValue(simulation.portStartXmm);
-        portStartY_->setValue(simulation.portStartYmm);
-        portStartZ_->setValue(simulation.portStartZmm);
-        portStopX_->setValue(simulation.portStopXmm);
-        portStopY_->setValue(simulation.portStopYmm);
-        portStopZ_->setValue(simulation.portStopZmm);
-        portImpedance_->setValue(simulation.portImpedanceOhm);
-        engine_->setCurrentIndex(engine_->findData(simulation.engine));
-        waveguideMode_->setCurrentText(simulation.waveguideMode);
-        waveguideFrequencyStart_->setValue(simulation.waveguideFrequencyStartGHz);
-        waveguideFrequencyStop_->setValue(simulation.waveguideFrequencyStopGHz);
-        waveguideWidth_->setValue(simulation.waveguideWidthMm);
-        waveguideHeight_->setValue(simulation.waveguideHeightMm);
-        waveguideLength_->setValue(simulation.waveguideLengthMm);
-        waveguidePortDepth_->setValue(simulation.waveguidePortDepthMm);
-        antennaSubstrateWidth_->setValue(simulation.antennaSubstrateWidthMm);
-        antennaSubstrateLength_->setValue(simulation.antennaSubstrateLengthMm);
-        antennaSubstrateThickness_->setValue(simulation.antennaSubstrateThicknessMm);
-        antennaPatchWidth_->setValue(simulation.antennaPatchWidthMm);
-        antennaPatchLength_->setValue(simulation.antennaPatchLengthMm);
-        antennaFeedPosition_->setValue(simulation.antennaFeedPositionMm);
-        antennaRelativePermittivity_->setValue(
-            simulation.antennaRelativePermittivity);
-        antennaConductivity_->setValue(simulation.antennaConductivitySPerM);
-        antennaLossTangent_->setValue(simulation.antennaLossTangent);
-        updateReferenceGeometry();
-        updateParameterList();
+        workspace_->setCurrentWidget(workspace_->widget(0));
         projectResultsTempDir_ = std::move(stagedResults);
         simulationResultsTempDir_.reset();
         solverFiles_ = project.solverFiles;
@@ -3515,17 +3202,10 @@ private:
         auto* excitations = new QTreeWidgetItem(objectsList_,
                                                  {QStringLiteral("Excitations")});
         new QTreeWidgetItem(excitations, {QStringLiteral("Lumped port (X/Y/Z)")});
-        new QTreeWidgetItem(excitations,
-                            {QStringLiteral("Rectangular waveguide modal ports")});
         auto* results = new QTreeWidgetItem(objectsList_,
                                              {QStringLiteral("Results")});
         if (!resultDirectory_.isEmpty()) {
-            const QString resultLabel = wr90Run_
-                ? QStringLiteral("WR90 S-parameters / VSWR")
-                : antennaRun_
-                    ? QStringLiteral("Antenna S11 / near-field / radiation")
-                    : QStringLiteral("CAD S11 / waveform");
-            new QTreeWidgetItem(results, {resultLabel});
+            new QTreeWidgetItem(results, {QStringLiteral("Simulation results")});
         }
         objectsList_->expandAll();
         if (row >= 0 && row < static_cast<int>(objects_.size())) {
@@ -3679,8 +3359,6 @@ private:
         if (output.isEmpty()) return;
 
         try {
-            view_->setWaveguideReference(false);
-            view_->setAntennaReference(false);
             const QString sceneDirectory = output + QStringLiteral("/cad_scene");
             if (!QDir().mkpath(sceneDirectory)) {
                 throw std::runtime_error("Cannot create the CAD scene output directory.");
@@ -3789,18 +3467,15 @@ private:
 
             resultDirectory_ = output;
             solverFiles_.clear();
-            wr90Run_ = false;
-            antennaRun_ = false;
+            projectResultFiles_.clear();
+            resultKind_ = QStringLiteral("cad");
             parameterModel_ = QStringLiteral("CAD scene");
             updateParameterList();
-            antennaRun_ = false;
             log_->clear();
             status_->setText(QStringLiteral("Running openEMS on %1 CAD solid(s)…")
                                  .arg(objects_.size()));
             statusBar()->showMessage(QStringLiteral("CAD simulation running…"));
             runButton_->setEnabled(false);
-            wr90Button_->setEnabled(false);
-            antennaButton_->setEnabled(false);
             cancelButton_->setEnabled(true);
             cancelRequested_ = false;
             progressBar_->setRange(0, 0);
@@ -3834,150 +3509,6 @@ private:
         }
     }
 
-    void runWr90Simulation() {
-        if (waveguidePortDepth_->value() > waveguideLength_->value()) {
-            QMessageBox::warning(
-                this, QStringLiteral("Invalid waveguide geometry"),
-                QStringLiteral("Waveguide port depth cannot exceed its length."));
-            return;
-        }
-        QString outputError;
-        const QString output = createTemporaryResultsDirectory(&outputError);
-        if (output.isEmpty()) {
-            QMessageBox::critical(this, QStringLiteral("WR90 simulation failed"),
-                                  outputError);
-            return;
-        }
-        resultDirectory_ = output;
-        wr90Run_ = true;
-        antennaRun_ = false;
-        parameterModel_ = QStringLiteral("WR90 %1").arg(waveguideMode_->currentText());
-        updateParameterList();
-        log_->clear();
-        status_->setText(
-            QStringLiteral("Running rectangular waveguide, %1, %2–%3 GHz…")
-                .arg(waveguideMode_->currentText())
-                .arg(waveguideFrequencyStart_->value(), 0, 'g', 6)
-                .arg(waveguideFrequencyStop_->value(), 0, 'g', 6));
-        statusBar()->showMessage(QStringLiteral("WR90 simulation running…"));
-        runButton_->setEnabled(false);
-        wr90Button_->setEnabled(false);
-        antennaButton_->setEnabled(false);
-        cancelButton_->setEnabled(true);
-        cancelRequested_ = false;
-        progressBar_->setRange(0, 0);
-        progressBar_->show();
-        solverProcess_->setProgram(qEnvironmentVariable(
-            "OPENEMS_PYTHON", QString::fromUtf8(RF_SIM_PYTHON_DEFAULT)));
-        solverProcess_->setArguments({
-            QString::fromUtf8(RF_SIM_WR90_SCRIPT),
-            QStringLiteral("--output"), output,
-            QStringLiteral("--engine"), engine_->currentData().toString(),
-            QStringLiteral("--mode"), waveguideMode_->currentText(),
-            QStringLiteral("--a-mm"),
-            QString::number(waveguideWidth_->value(), 'g', 12),
-            QStringLiteral("--b-mm"),
-            QString::number(waveguideHeight_->value(), 'g', 12),
-            QStringLiteral("--length-mm"),
-            QString::number(waveguideLength_->value(), 'g', 12),
-            QStringLiteral("--port-depth-mm"),
-            QString::number(waveguidePortDepth_->value(), 'g', 12),
-            QStringLiteral("--f-start-ghz"),
-            QString::number(waveguideFrequencyStart_->value(), 'g', 12),
-            QStringLiteral("--f-stop-ghz"),
-            QString::number(waveguideFrequencyStop_->value(), 'g', 12),
-            QStringLiteral("--frequency-points"),
-            QString::number(static_cast<int>(frequencyPoints_->value())),
-            QStringLiteral("--timesteps"),
-            QString::number(static_cast<int>(maxTimesteps_->value())),
-            QStringLiteral("--mesh-div"),
-            QString::number(static_cast<int>(meshDivisions_->value()))
-        });
-        solverProcess_->start();
-    }
-
-    void runAntennaSimulation() {
-        if (frequencyStart_->value() >= frequencyStop_->value()) {
-            QMessageBox::warning(
-                this, QStringLiteral("Invalid frequency band"),
-                QStringLiteral("Frequency stop must be greater than frequency start."));
-            return;
-        }
-        if (antennaPatchWidth_->value() > antennaSubstrateWidth_->value() ||
-            antennaPatchLength_->value() > antennaSubstrateLength_->value() ||
-            std::abs(antennaFeedPosition_->value()) >
-                antennaPatchWidth_->value() * 0.5) {
-            QMessageBox::warning(
-                this, QStringLiteral("Invalid antenna geometry"),
-                QStringLiteral("The patch must fit on the substrate and the feed must lie within the patch."));
-            return;
-        }
-        QString outputError;
-        const QString output = createTemporaryResultsDirectory(&outputError);
-        if (output.isEmpty()) {
-            QMessageBox::critical(this, QStringLiteral("Antenna simulation failed"),
-                                  outputError);
-            return;
-        }
-        resultDirectory_ = output;
-        wr90Run_ = false;
-        antennaRun_ = true;
-        parameterModel_ = QStringLiteral("Patch antenna reference");
-        updateParameterList();
-        view_->setAntennaReference(true);
-        log_->clear();
-        status_->setText(QStringLiteral(
-            "Running patch antenna with S11, near-field E/H and NF2FF radiation pattern…"));
-        statusBar()->showMessage(QStringLiteral("Patch antenna simulation running…"));
-        runButton_->setEnabled(false);
-        wr90Button_->setEnabled(false);
-        antennaButton_->setEnabled(false);
-        cancelButton_->setEnabled(true);
-        cancelRequested_ = false;
-        progressBar_->setRange(0, 0);
-        progressBar_->show();
-        solverProcess_->setProgram(qEnvironmentVariable(
-            "OPENEMS_PYTHON", QString::fromUtf8(RF_SIM_PYTHON_DEFAULT)));
-        solverProcess_->setArguments({
-            QString::fromUtf8(RF_SIM_SOLVER_SCRIPT),
-            QStringLiteral("--output"), output,
-            QStringLiteral("--engine"), engine_->currentData().toString(),
-            QStringLiteral("--timesteps"),
-            QString::number(static_cast<int>(maxTimesteps_->value())),
-            QStringLiteral("--mesh-div"),
-            QString::number(static_cast<int>(meshDivisions_->value())),
-            QStringLiteral("--f-start-ghz"),
-            QString::number(frequencyStart_->value(), 'g', 12),
-            QStringLiteral("--f-stop-ghz"),
-            QString::number(frequencyStop_->value(), 'g', 12),
-            QStringLiteral("--frequency-points"),
-            QString::number(static_cast<int>(frequencyPoints_->value())),
-            QStringLiteral("--boundary"),
-            boundary_->currentData().toString(),
-            QStringLiteral("--port-impedance"),
-            QString::number(portImpedance_->value(), 'g', 12),
-            QStringLiteral("--substrate-width-mm"),
-            QString::number(antennaSubstrateWidth_->value(), 'g', 12),
-            QStringLiteral("--substrate-length-mm"),
-            QString::number(antennaSubstrateLength_->value(), 'g', 12),
-            QStringLiteral("--substrate-thickness-mm"),
-            QString::number(antennaSubstrateThickness_->value(), 'g', 12),
-            QStringLiteral("--patch-width-mm"),
-            QString::number(antennaPatchWidth_->value(), 'g', 12),
-            QStringLiteral("--patch-length-mm"),
-            QString::number(antennaPatchLength_->value(), 'g', 12),
-            QStringLiteral("--feed-position-mm"),
-            QString::number(antennaFeedPosition_->value(), 'g', 12),
-            QStringLiteral("--substrate-permittivity"),
-            QString::number(antennaRelativePermittivity_->value(), 'g', 12),
-            QStringLiteral("--substrate-conductivity-s-per-m"),
-            QString::number(antennaConductivity_->value(), 'g', 12),
-            QStringLiteral("--substrate-loss-tangent"),
-            QString::number(antennaLossTangent_->value(), 'g', 12)
-        });
-        solverProcess_->start();
-    }
-
     void cancelSimulation() {
         if (solverProcess_->state() == QProcess::NotRunning) return;
         cancelRequested_ = true;
@@ -3999,11 +3530,12 @@ private:
     std::unique_ptr<QTemporaryDir> projectResultsTempDir_;
     std::unique_ptr<QTemporaryDir> simulationResultsTempDir_;
     QMap<QString, QByteArray> solverFiles_;
+    QMap<QString, QByteArray> projectResultFiles_;
+    rfsim::OemSimulationSettings projectSimulationSettings_;
     std::vector<rfsim::OemParameter> geometryParameters_;
     std::vector<rfsim::OemMaterial> geometryMaterials_;
     std::vector<rfsim::OemFeature> geometryHistory_;
-    bool wr90Run_ = false;
-    bool antennaRun_ = false;
+    QString resultKind_ = QStringLiteral("none");
     QString parameterModel_ = QStringLiteral("CAD scene");
     bool topViewEnabled_ = false;
     bool gridVisible_ = true;
@@ -4043,22 +3575,6 @@ private:
     QDoubleSpinBox* frequencyPoints_ = nullptr;
     QDoubleSpinBox* meshDivisions_ = nullptr;
     QDoubleSpinBox* maxTimesteps_ = nullptr;
-    QComboBox* waveguideMode_ = nullptr;
-    QDoubleSpinBox* waveguideFrequencyStart_ = nullptr;
-    QDoubleSpinBox* waveguideFrequencyStop_ = nullptr;
-    QDoubleSpinBox* waveguideWidth_ = nullptr;
-    QDoubleSpinBox* waveguideHeight_ = nullptr;
-    QDoubleSpinBox* waveguideLength_ = nullptr;
-    QDoubleSpinBox* waveguidePortDepth_ = nullptr;
-    QDoubleSpinBox* antennaSubstrateWidth_ = nullptr;
-    QDoubleSpinBox* antennaSubstrateLength_ = nullptr;
-    QDoubleSpinBox* antennaSubstrateThickness_ = nullptr;
-    QDoubleSpinBox* antennaPatchWidth_ = nullptr;
-    QDoubleSpinBox* antennaPatchLength_ = nullptr;
-    QDoubleSpinBox* antennaFeedPosition_ = nullptr;
-    QDoubleSpinBox* antennaRelativePermittivity_ = nullptr;
-    QDoubleSpinBox* antennaConductivity_ = nullptr;
-    QDoubleSpinBox* antennaLossTangent_ = nullptr;
     QComboBox* boundary_ = nullptr;
     QLabel* selectedMaterialLabel_ = nullptr;
     QComboBox* materialKind_ = nullptr;
@@ -4066,9 +3582,9 @@ private:
     QDoubleSpinBox* conductivity_ = nullptr;
     QDoubleSpinBox* lossTangent_ = nullptr;
     QComboBox* engine_ = nullptr;
+    QToolButton* solverSelectionButton_ = nullptr;
+    QToolButton* domainSelectionButton_ = nullptr;
     QPushButton* runButton_ = nullptr;
-    QPushButton* wr90Button_ = nullptr;
-    QPushButton* antennaButton_ = nullptr;
     QPushButton* cancelButton_ = nullptr;
     QLabel* status_ = nullptr;
     QPlainTextEdit* log_ = nullptr;
@@ -4076,9 +3592,6 @@ private:
     PlotWidget* s11Plot_ = nullptr;
     PlotWidget* vswrPlot_ = nullptr;
     PlotWidget* wavePlot_ = nullptr;
-    PlotWidget* farFieldPlot_ = nullptr;
-    FieldMapWidget* nearFieldEMap_ = nullptr;
-    FieldMapWidget* nearFieldHMap_ = nullptr;
     QTableWidget* parameterTable_ = nullptr;
     QProcess* solverProcess_ = nullptr;
     bool cancelRequested_ = false;
@@ -4098,19 +3611,14 @@ int main(int argc, char* argv[]) {
     } else {
         window.showMaximized();
     }
-    if (mode == QStringLiteral("--smoke-test") ||
-        mode == QStringLiteral("--smoke-wr90-load")) {
+    if (mode == QStringLiteral("--smoke-test")) {
         QTimer::singleShot(250, &application, &QApplication::quit);
     } else if (mode == QStringLiteral("--smoke-solver")) {
         window.startSimulationForSmokeTest();
-    } else if (mode == QStringLiteral("--smoke-wr90-run")) {
-        window.startWr90SimulationForSmokeTest();
     } else if (mode == QStringLiteral("--smoke-x-port")) {
         QTimer::singleShot(0, &window, [&window] {
             window.startXAxisPortSmokeTest();
         });
-    } else if (mode == QStringLiteral("--smoke-antenna-run")) {
-        window.startAntennaSimulationForSmokeTest();
     } else if (mode == QStringLiteral("--smoke-draw")) {
         QTimer::singleShot(0, &window, [&window] {
             window.startDrawSmokeTest();
@@ -4144,7 +3652,6 @@ int main(int argc, char* argv[]) {
     }
     const int applicationResult = application.exec();
     if (mode == QStringLiteral("--smoke-solver") ||
-        mode == QStringLiteral("--smoke-wr90-run") ||
         mode == QStringLiteral("--smoke-x-port") ||
         mode == QStringLiteral("--smoke-draw") ||
         mode == QStringLiteral("--smoke-curve-draw") ||
@@ -4154,9 +3661,6 @@ int main(int argc, char* argv[]) {
         mode == QStringLiteral("--smoke-open-project") ||
         mode == QStringLiteral("--smoke-cancel")) {
         return window.smokeTestExitCode();
-    }
-    if (mode == QStringLiteral("--smoke-wr90-load")) {
-        return window.hasLoadedWr90Results() ? 0 : 1;
     }
     return applicationResult;
 }

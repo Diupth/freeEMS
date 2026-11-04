@@ -20,13 +20,6 @@ public:
     void setObjects(const std::vector<rfsim::SolidObject>& objects);
     void setSelectedIndex(int index);
     void setProjectActive(bool active);
-    void setWaveguideReference(bool enabled);
-    void setAntennaReference(bool enabled);
-    void setWaveguideDimensions(double widthMm, double heightMm,
-                                double lengthMm, double portDepthMm);
-    void setAntennaDimensions(double substrateWidthMm, double substrateLengthMm,
-                              double substrateThicknessMm, double patchWidthMm,
-                              double patchLengthMm, double feedPositionMm);
     void setLumpedPort(double startX, double startY, double startZ,
                        double stopX, double stopY, double stopZ);
     void setDrawMode(
@@ -56,28 +49,15 @@ private:
     QPoint lastMousePosition_;
     int selectedIndex_ = -1;
     bool projectActive_ = false;
-    bool waveguideReference_ = false;
-    bool antennaReference_ = false;
     bool topView_ = false;
     bool drawing_ = false;
     bool curveDrawing_ = false;
-    bool lumpedPortVisible_ = true;
-    double portStartX_ = -2.0;
-    double portStartY_ = 10.0;
-    double portStartZ_ = -1.0;
-    double portStopX_ = -2.0;
-    double portStopY_ = 10.0;
-    double portStopZ_ = 2.6;
-    double waveguideWidthMm_ = 22.86;
-    double waveguideHeightMm_ = 10.16;
-    double waveguideLengthMm_ = 100.0;
-    double waveguidePortDepthMm_ = 5.0;
-    double antennaSubstrateWidthMm_ = 60.0;
-    double antennaSubstrateLengthMm_ = 60.0;
-    double antennaSubstrateThicknessMm_ = 1.524;
-    double antennaPatchWidthMm_ = 32.0;
-    double antennaPatchLengthMm_ = 40.0;
-    double antennaFeedPositionMm_ = -6.0;
+    double portStartX_ = 0.0;
+    double portStartY_ = 0.0;
+    double portStartZ_ = 0.0;
+    double portStopX_ = 0.0;
+    double portStopY_ = 0.0;
+    double portStopZ_ = 1.0;
     double curveDrawZmm_ = 0.0;
     QPointF drawStart_;
     QPointF drawCurrent_;

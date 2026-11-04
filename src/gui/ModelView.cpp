@@ -38,44 +38,6 @@ void ModelView::setProjectActive(bool active) {
     update();
 }
 
-void ModelView::setWaveguideReference(bool enabled) {
-    waveguideReference_ = enabled;
-    if (enabled) antennaReference_ = false;
-    lumpedPortVisible_ = !enabled;
-    update();
-}
-
-void ModelView::setAntennaReference(bool enabled) {
-    antennaReference_ = enabled;
-    if (enabled) waveguideReference_ = false;
-    lumpedPortVisible_ = !enabled;
-    update();
-}
-
-void ModelView::setWaveguideDimensions(double widthMm, double heightMm,
-                                       double lengthMm, double portDepthMm) {
-    waveguideWidthMm_ = widthMm;
-    waveguideHeightMm_ = heightMm;
-    waveguideLengthMm_ = lengthMm;
-    waveguidePortDepthMm_ = portDepthMm;
-    update();
-}
-
-void ModelView::setAntennaDimensions(double substrateWidthMm,
-                                     double substrateLengthMm,
-                                     double substrateThicknessMm,
-                                     double patchWidthMm,
-                                     double patchLengthMm,
-                                     double feedPositionMm) {
-    antennaSubstrateWidthMm_ = substrateWidthMm;
-    antennaSubstrateLengthMm_ = substrateLengthMm;
-    antennaSubstrateThicknessMm_ = substrateThicknessMm;
-    antennaPatchWidthMm_ = patchWidthMm;
-    antennaPatchLengthMm_ = patchLengthMm;
-    antennaFeedPositionMm_ = feedPositionMm;
-    update();
-}
-
 void ModelView::setLumpedPort(double startX, double startY, double startZ,
                               double stopX, double stopY, double stopZ) {
     portStartX_ = startX;
@@ -96,8 +58,6 @@ void ModelView::setDrawMode(
     curveDrawing_ = false;
     drawing_ = false;
     topView_ = static_cast<bool>(rectangleHandler_);
-    waveguideReference_ = false;
-    antennaReference_ = false;
     setCursor(topView_ ? Qt::CrossCursor : Qt::ArrowCursor);
     update();
 }
@@ -111,8 +71,6 @@ void ModelView::setCurveDrawMode(
     curveDrawing_ = static_cast<bool>(curveHandler_);
     drawing_ = false;
     topView_ = curveDrawing_;
-    waveguideReference_ = false;
-    antennaReference_ = false;
     setCursor(curveDrawing_ ? Qt::CrossCursor : Qt::ArrowCursor);
     update();
 }
@@ -160,18 +118,7 @@ QPointF ModelView::project(double x, double y, double z, double scale) const {
 double ModelView::sceneScale() const {
     double minX = 0.0, minY = 0.0, minZ = 0.0;
     double maxX = 40.0, maxY = 20.0, maxZ = 1.6;
-    if (waveguideReference_) {
-        maxX = waveguideWidthMm_;
-        maxY = waveguideHeightMm_;
-        maxZ = waveguideLengthMm_;
-    } else if (antennaReference_) {
-        minX = -antennaSubstrateWidthMm_ * 0.5;
-        maxX = antennaSubstrateWidthMm_ * 0.5;
-        minY = -antennaSubstrateLengthMm_ * 0.5;
-        maxY = antennaSubstrateLengthMm_ * 0.5;
-        minZ = 0.0;
-        maxZ = antennaSubstrateThicknessMm_;
-    } else if (!objects_.empty()) {
+    if (!objects_.empty()) {
         minX = minY = minZ = std::numeric_limits<double>::max();
         maxX = maxY = maxZ = std::numeric_limits<double>::lowest();
         for (const auto& object : objects_) {
@@ -194,18 +141,7 @@ double ModelView::sceneScale() const {
 QPointF ModelView::screenToWorld(const QPointF& point) const {
     double minX = 0.0, minY = 0.0, minZ = 0.0;
     double maxX = 40.0, maxY = 20.0, maxZ = 1.6;
-    if (waveguideReference_) {
-        maxX = waveguideWidthMm_;
-        maxY = waveguideHeightMm_;
-        maxZ = waveguideLengthMm_;
-    } else if (antennaReference_) {
-        minX = -antennaSubstrateWidthMm_ * 0.5;
-        maxX = antennaSubstrateWidthMm_ * 0.5;
-        minY = -antennaSubstrateLengthMm_ * 0.5;
-        maxY = antennaSubstrateLengthMm_ * 0.5;
-        minZ = 0.0;
-        maxZ = antennaSubstrateThicknessMm_;
-    } else if (!objects_.empty()) {
+    if (!objects_.empty()) {
         minX = minY = minZ = std::numeric_limits<double>::max();
         maxX = maxY = maxZ = std::numeric_limits<double>::lowest();
         for (const auto& object : objects_) {
@@ -233,19 +169,7 @@ void ModelView::paintEvent(QPaintEvent*) {
 
     double minX = 0.0, minY = 0.0, minZ = 0.0;
     double maxX = 40.0, maxY = 20.0, maxZ = 1.6;
-    if (waveguideReference_) {
-        minX = minY = minZ = 0.0;
-        maxX = waveguideWidthMm_;
-        maxY = waveguideHeightMm_;
-        maxZ = waveguideLengthMm_;
-    } else if (antennaReference_) {
-        minX = -antennaSubstrateWidthMm_ * 0.5;
-        maxX = antennaSubstrateWidthMm_ * 0.5;
-        minY = -antennaSubstrateLengthMm_ * 0.5;
-        maxY = antennaSubstrateLengthMm_ * 0.5;
-        minZ = 0.0;
-        maxZ = antennaSubstrateThicknessMm_;
-    } else if (!objects_.empty()) {
+    if (!objects_.empty()) {
         minX = minY = minZ = std::numeric_limits<double>::max();
         maxX = maxY = maxZ = std::numeric_limits<double>::lowest();
         for (const auto& object : objects_) {
@@ -270,7 +194,7 @@ void ModelView::paintEvent(QPaintEvent*) {
                        y - (minY + maxY) * 0.5, z, scale);
     };
 
-    if (showGrid_ && topView_ && !waveguideReference_) {
+    if (showGrid_ && topView_) {
         painter.setPen(QPen(QColor(220, 226, 233), 1));
         const double gridStep = 10.0;
         const double firstX = std::ceil(minX / gridStep) * gridStep;
@@ -281,96 +205,6 @@ void ModelView::paintEvent(QPaintEvent*) {
         for (double y = firstY; y <= maxY; y += gridStep) {
             painter.drawLine(point(minX, y, minZ), point(maxX, y, minZ));
         }
-    }
-
-    if (waveguideReference_) {
-        const std::array<QPointF, 8> corners = {{
-            point(0, 0, 0), point(waveguideWidthMm_, 0, 0),
-            point(waveguideWidthMm_, waveguideHeightMm_, 0),
-            point(0, waveguideHeightMm_, 0), point(0, 0, waveguideLengthMm_),
-            point(waveguideWidthMm_, 0, waveguideLengthMm_),
-            point(waveguideWidthMm_, waveguideHeightMm_, waveguideLengthMm_),
-            point(0, waveguideHeightMm_, waveguideLengthMm_)
-        }};
-        const std::array<std::array<int, 2>, 12> edges = {{
-            {{0, 1}}, {{1, 2}}, {{2, 3}}, {{3, 0}},
-            {{4, 5}}, {{5, 6}}, {{6, 7}}, {{7, 4}},
-            {{0, 4}}, {{1, 5}}, {{2, 6}}, {{3, 7}}
-        }};
-        painter.setPen(QPen(QColor(48, 96, 142), 2.2));
-        for (const auto& edge : edges) {
-            painter.drawLine(corners[edge[0]], corners[edge[1]]);
-        }
-        const double portOffset =
-            std::max(waveguidePortDepthMm_ * 0.5, waveguideLengthMm_ * 0.08);
-        for (const double z : {portOffset, waveguideLengthMm_ - portOffset}) {
-            const std::array<QPointF, 4> port = {{
-                point(0, 0, z), point(waveguideWidthMm_, 0, z),
-                point(waveguideWidthMm_, waveguideHeightMm_, z),
-                point(0, waveguideHeightMm_, z)
-            }};
-            painter.setPen(QPen(QColor(210, 105, 47), 2, Qt::DashLine));
-            for (size_t edge = 0; edge < port.size(); ++edge) {
-                painter.drawLine(port[edge], port[(edge + 1) % port.size()]);
-            }
-        }
-        painter.setPen(QColor(37, 49, 66));
-        painter.drawText(QRect(16, 12, width() - 32, 24),
-                         Qt::AlignLeft | Qt::AlignVCenter,
-                         QStringLiteral("Rectangular waveguide — %1 × %2 × %3 mm")
-                             .arg(waveguideWidthMm_, 0, 'g', 5)
-                             .arg(waveguideHeightMm_, 0, 'g', 5)
-                             .arg(waveguideLengthMm_, 0, 'g', 5));
-        return;
-    }
-    if (antennaReference_) {
-        const double halfWidth = antennaSubstrateWidthMm_ * 0.5;
-        const double halfLength = antennaSubstrateLengthMm_ * 0.5;
-        const std::array<QPointF, 8> ground = {{
-            point(-halfWidth, -halfLength, 0),
-            point(halfWidth, -halfLength, 0),
-            point(halfWidth, halfLength, 0),
-            point(-halfWidth, halfLength, 0),
-            point(-halfWidth, -halfLength, antennaSubstrateThicknessMm_),
-            point(halfWidth, -halfLength, antennaSubstrateThicknessMm_),
-            point(halfWidth, halfLength, antennaSubstrateThicknessMm_),
-            point(-halfWidth, halfLength, antennaSubstrateThicknessMm_)
-        }};
-        const std::array<std::array<int, 2>, 12> edges = {{
-            {{0, 1}}, {{1, 2}}, {{2, 3}}, {{3, 0}},
-            {{4, 5}}, {{5, 6}}, {{6, 7}}, {{7, 4}},
-            {{0, 4}}, {{1, 5}}, {{2, 6}}, {{3, 7}}
-        }};
-        painter.setPen(QPen(QColor(48, 96, 142), 1.5));
-        for (const auto& edge : edges) {
-            painter.drawLine(ground[edge[0]], ground[edge[1]]);
-        }
-        const double patchHalfWidth = antennaPatchWidthMm_ * 0.5;
-        const double patchHalfLength = antennaPatchLengthMm_ * 0.5;
-        const std::array<QPointF, 4> patch = {{
-            point(-patchHalfWidth, -patchHalfLength, antennaSubstrateThicknessMm_),
-            point(patchHalfWidth, -patchHalfLength, antennaSubstrateThicknessMm_),
-            point(patchHalfWidth, patchHalfLength, antennaSubstrateThicknessMm_),
-            point(-patchHalfWidth, patchHalfLength, antennaSubstrateThicknessMm_)
-        }};
-        painter.setPen(QPen(QColor(192, 67, 45), 2));
-        painter.setBrush(QColor(220, 91, 47, 110));
-        painter.drawPolygon(QPolygonF(
-            {patch[0], patch[1], patch[2], patch[3]}));
-        const QPointF feed = point(antennaFeedPositionMm_, 0,
-                                   antennaSubstrateThicknessMm_);
-        painter.setPen(QPen(QColor(30, 135, 80), 3));
-        painter.drawLine(point(antennaFeedPositionMm_, 0, 0), feed);
-        painter.drawEllipse(feed, 5, 5);
-        painter.setPen(QColor(37, 49, 66));
-        painter.drawText(QRect(16, 12, width() - 32, 24),
-                         Qt::AlignLeft | Qt::AlignVCenter,
-                         QStringLiteral("Patch antenna — substrate %1 × %2 mm, patch %3 × %4 mm")
-                             .arg(antennaSubstrateWidthMm_, 0, 'g', 5)
-                             .arg(antennaSubstrateLengthMm_, 0, 'g', 5)
-                             .arg(antennaPatchWidthMm_, 0, 'g', 5)
-                             .arg(antennaPatchLengthMm_, 0, 'g', 5));
-        return;
     }
 
     for (size_t index = 0; index < objects_.size(); ++index) {
@@ -522,16 +356,14 @@ void ModelView::paintEvent(QPaintEvent*) {
                          QString::fromStdString(object.name));
     }
 
-    if (lumpedPortVisible_ && !waveguideReference_) {
-        const QPointF start = point(portStartX_, portStartY_, portStartZ_);
-        const QPointF stop = point(portStopX_, portStopY_, portStopZ_);
-        painter.setPen(QPen(QColor(192, 67, 45), 3));
-        painter.drawLine(start, stop);
-        painter.drawLine(start + QPointF(-6, -6), start + QPointF(6, 6));
-        painter.drawLine(start + QPointF(-6, 6), start + QPointF(6, -6));
-        painter.setPen(QColor(128, 45, 37));
-        painter.drawText(stop + QPointF(8, -8), QStringLiteral("Lumped Port"));
-    }
+    const QPointF start = point(portStartX_, portStartY_, portStartZ_);
+    const QPointF stop = point(portStopX_, portStopY_, portStopZ_);
+    painter.setPen(QPen(QColor(192, 67, 45), 3));
+    painter.drawLine(start, stop);
+    painter.drawLine(start + QPointF(-6, -6), start + QPointF(6, 6));
+    painter.drawLine(start + QPointF(-6, 6), start + QPointF(6, -6));
+    painter.setPen(QColor(128, 45, 37));
+    painter.drawText(stop + QPointF(8, -8), QStringLiteral("Lumped Port"));
     if (curveDrawing_) {
         QPolygonF curve;
         for (const auto& point : curveScreenPoints_) curve.append(point);

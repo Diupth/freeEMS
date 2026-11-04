@@ -114,17 +114,14 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
     rfsim::OemProjectDocument project;
     project.resultKind = QStringLiteral("waveguide");
     auto& simulation = project.simulation;
-    simulation.waveguideFrequencyStartGHz = 8.2;
-    simulation.waveguideFrequencyStopGHz = 12.4;
     simulation.frequencyPoints = 201;
     simulation.meshDivisions = 30;
     simulation.maximumTimesteps = 20000;
-    simulation.waveguideMode = QStringLiteral("TE10");
-    simulation.waveguideWidthMm = 22.86;
-    simulation.waveguideHeightMm = 10.16;
-    simulation.waveguideLengthMm = 100.0;
-    simulation.waveguidePortDepthMm = 5.0;
     simulation.engine = QStringLiteral("cpu");
+    constexpr double width = 22.86;
+    constexpr double height = 10.16;
+    constexpr double length = 100.0;
+    constexpr double portDepth = 5.0;
 
     project.materials.push_back(
         {QStringLiteral("mat-waveguide-wall"), QStringLiteral("Waveguide wall"),
@@ -142,14 +139,14 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
                      QStringLiteral("mm"), value, true, minimum, maximum);
         addArgument(&waveguide, name, parameterId, QStringLiteral("mm"), value);
     };
-    addWaveguideValue(QStringLiteral("width-a"), simulation.waveguideWidthMm,
+    addWaveguideValue(QStringLiteral("width-a"), width,
                       18.0, 27.0);
-    addWaveguideValue(QStringLiteral("height-b"), simulation.waveguideHeightMm,
+    addWaveguideValue(QStringLiteral("height-b"), height,
                       8.0, 13.0);
-    addWaveguideValue(QStringLiteral("length"), simulation.waveguideLengthMm,
+    addWaveguideValue(QStringLiteral("length"), length,
                       60.0, 150.0);
     addWaveguideValue(QStringLiteral("port-depth"),
-                      simulation.waveguidePortDepthMm, 2.0, 10.0);
+                      portDepth, 2.0, 10.0);
     project.featureHistory.push_back(std::move(waveguide));
 
     readSolverFiles(outputDirectory, &project);
@@ -173,20 +170,19 @@ rfsim::OemProjectDocument antennaProject(const QString& outputDirectory) {
     simulation.meshDivisions = 25;
     simulation.maximumTimesteps = 30000;
     simulation.engine = QStringLiteral("cpu");
-    simulation.antennaSubstrateWidthMm = 60.0;
-    simulation.antennaSubstrateLengthMm = 60.0;
-    simulation.antennaSubstrateThicknessMm = 1.524;
-    simulation.antennaPatchWidthMm = 32.0;
-    simulation.antennaPatchLengthMm = 40.0;
-    simulation.antennaFeedPositionMm = -6.0;
-    simulation.antennaRelativePermittivity = 3.38;
+    constexpr double substrateWidth = 60.0;
+    constexpr double substrateLength = 60.0;
+    constexpr double substrateThickness = 1.524;
+    constexpr double patchWidth = 32.0;
+    constexpr double patchLength = 40.0;
+    constexpr double feedPosition = -6.0;
+    constexpr double substratePermittivity = 3.38;
 
     project.materials = {
         {QStringLiteral("mat-antenna-pec"), QStringLiteral("Antenna metal"),
          QStringLiteral("pec"), 1.0, 0.0, 0.0},
         {QStringLiteral("mat-substrate"), QStringLiteral("Substrate"),
-         QStringLiteral("dielectric"), simulation.antennaRelativePermittivity,
-         simulation.antennaConductivitySPerM, simulation.antennaLossTangent}
+         QStringLiteral("dielectric"), substratePermittivity, 0.0, 0.0}
     };
     const auto addAntennaFeature =
         [&](const QString& id, const QString& type, const QString& material,
@@ -217,16 +213,16 @@ rfsim::OemProjectDocument antennaProject(const QString& outputDirectory) {
                       QStringLiteral("mat-substrate"));
     auto& substrate = project.featureHistory.back();
     addAntennaValue(&substrate, QStringLiteral("width"),
-                    QStringLiteral("mm"), simulation.antennaSubstrateWidthMm,
+                    QStringLiteral("mm"), substrateWidth,
                     50.0, 80.0, false);
     addAntennaValue(&substrate, QStringLiteral("length"),
-                    QStringLiteral("mm"), simulation.antennaSubstrateLengthMm,
+                    QStringLiteral("mm"), substrateLength,
                     50.0, 80.0, false);
     addAntennaValue(&substrate, QStringLiteral("thickness"),
-                    QStringLiteral("mm"), simulation.antennaSubstrateThicknessMm,
+                    QStringLiteral("mm"), substrateThickness,
                     0.8, 2.0, false);
     addAntennaValue(&substrate, QStringLiteral("relative-permittivity"),
-                    QStringLiteral("1"), simulation.antennaRelativePermittivity,
+                    QStringLiteral("1"), substratePermittivity,
                     2.0, 5.0, true);
 
     addAntennaFeature(QStringLiteral("antenna-patch"),
@@ -235,11 +231,11 @@ rfsim::OemProjectDocument antennaProject(const QString& outputDirectory) {
                       {QStringLiteral("antenna-substrate")});
     auto& patch = project.featureHistory.back();
     addAntennaValue(&patch, QStringLiteral("width"), QStringLiteral("mm"),
-                    simulation.antennaPatchWidthMm, 25.0, 38.0, true);
+                    patchWidth, 25.0, 38.0, true);
     addAntennaValue(&patch, QStringLiteral("length"), QStringLiteral("mm"),
-                    simulation.antennaPatchLengthMm, 30.0, 48.0, true);
+                    patchLength, 30.0, 48.0, true);
     addAntennaValue(&patch, QStringLiteral("feed-position"),
-                    QStringLiteral("mm"), simulation.antennaFeedPositionMm,
+                    QStringLiteral("mm"), feedPosition,
                     -12.0, -2.0, true);
 
     readSolverFiles(outputDirectory, &project);
