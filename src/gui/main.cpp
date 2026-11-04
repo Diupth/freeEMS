@@ -516,8 +516,20 @@ public:
         materialsForm->addRow(QStringLiteral("Loss tangent tanδ"), lossTangent_);
         materialsLayout->addWidget(
             new QLabel(QStringLiteral("Materials in this project")));
-        projectMaterialsList_ = new QTreeWidget;
-        projectMaterialsList_->setHeaderHidden(true);
+        projectMaterialsList_ = new QTableWidget(0, 5);
+        projectMaterialsList_->setHorizontalHeaderLabels(
+            {QStringLiteral("Material"), QStringLiteral("Type"),
+             QStringLiteral("Relative permittivity"),
+             QStringLiteral("Conductivity (S/m)"),
+             QStringLiteral("Loss tangent")});
+        projectMaterialsList_->horizontalHeader()->setStretchLastSection(true);
+        projectMaterialsList_->verticalHeader()->hide();
+        projectMaterialsList_->setSelectionBehavior(
+            QAbstractItemView::SelectRows);
+        projectMaterialsList_->setEditTriggers(
+            QAbstractItemView::DoubleClicked |
+            QAbstractItemView::EditKeyPressed |
+            QAbstractItemView::SelectedClicked);
         projectMaterialsList_->setMaximumHeight(150);
         materialsLayout->addWidget(projectMaterialsList_);
         materialsLayout->addLayout(materialsForm);
@@ -613,12 +625,23 @@ public:
             {QStringLiteral("Name"), QStringLiteral("Expression"),
              QStringLiteral("Value"), QStringLiteral("Unit"),
              QStringLiteral("Description")});
-        parameterTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        parameterTable_->setEditTriggers(
+            QAbstractItemView::DoubleClicked |
+            QAbstractItemView::EditKeyPressed |
+            QAbstractItemView::SelectedClicked);
         parameterTable_->horizontalHeader()->setStretchLastSection(true);
         parameterTable_->verticalHeader()->setDefaultSectionSize(21);
         parameterTable_->verticalHeader()->setMinimumSectionSize(18);
         parameterTable_->setAlternatingRowColors(true);
         updateParameterList();
+        connect(parameterTable_, &QTableWidget::itemChanged, this,
+                [this](QTableWidgetItem* item) {
+            updateProjectParameter(item);
+        });
+        connect(projectMaterialsList_, &QTableWidget::itemChanged, this,
+                [this](QTableWidgetItem* item) {
+            updateProjectMaterial(item);
+        });
         resultsPage_ = new QWidget;
         auto* resultsLayout = new QVBoxLayout(resultsPage_);
         projectResultsList_ = new QTreeWidget;
@@ -1001,6 +1024,7 @@ public:
             addArgument(pointName + QStringLiteral("_z"), QStringLiteral("mm"),
                         point.z);
         }
+        refreshProjectMaterialList();
         updateParameterList();
     }
 
@@ -1235,6 +1259,13 @@ public:
                           QStringLiteral("solid"),
                           {QStringLiteral("test-surface")},
                           geometryMaterials_.front().id);
+        const double editedParameterValue =
+            geometryParameters_.front().evaluatedValue + 0.5;
+        parameterTable_->item(0, 2)->setText(
+            QString::number(editedParameterValue, 'g', 10));
+        const QString editedMaterialName =
+            geometryMaterials_.front().name + QStringLiteral(" edited");
+        projectMaterialsList_->item(0, 0)->setText(editedMaterialName);
         const auto originalObjects = objects_;
         const double originalFrequency = frequencyStart_->value();
         const bool saved = saveProjectFile(projectPath_, &error);
@@ -1257,6 +1288,10 @@ public:
             parameterTable_->item(0, 0) &&
             parameterTable_->item(0, 0)->text() ==
                 geometryParameters_.front().name &&
+            geometryParameters_.front().evaluatedValue ==
+                editedParameterValue &&
+            geometryMaterials_.front().name == editedMaterialName &&
+            projectMaterialsList_->item(0, 0)->text() == editedMaterialName &&
             objects_[1].kind == rfsim::SolidKind::Curve &&
             objects_[1].curvePoints.size() == 3 &&
             objects_[3].kind == rfsim::SolidKind::Surface &&
@@ -1330,7 +1365,7 @@ public:
             objectsList_->topLevelItem(1)->childCount() > 0 &&
             objectsList_->topLevelItem(2)->childCount() > 0 &&
             objectsList_->topLevelItem(3)->childCount() > 0 &&
-            projectMaterialsList_->topLevelItemCount() > 0 &&
+            projectMaterialsList_->rowCount() > 0 &&
             projectResultsList_->topLevelItemCount() > 0;
         const bool projectParametersPopulated =
             !geometryParameters_.empty() &&
@@ -2446,11 +2481,14 @@ private:
     }
 
     void updateParameterList() {
+        const QSignalBlocker blocker(parameterTable_);
         parameterTable_->clearContents();
         if (geometryParameters_.empty()) {
             parameterTable_->setRowCount(1);
-            parameterTable_->setItem(
-                0, 0, new QTableWidgetItem(QStringLiteral("No project parameters")));
+            auto* emptyItem =
+                new QTableWidgetItem(QStringLiteral("No project parameters"));
+            emptyItem->setFlags(emptyItem->flags() & ~Qt::ItemIsEditable);
+            parameterTable_->setItem(0, 0, emptyItem);
             return;
         }
 
@@ -2477,10 +2515,97 @@ private:
             }};
             for (int column = 0; column < static_cast<int>(values.size());
                  ++column) {
-                parameterTable_->setItem(
-                    row, column, new QTableWidgetItem(values[column]));
+                auto* item = new QTableWidgetItem(values[column]);
+                item->setData(Qt::UserRole, parameter.id);
+                if (column == 4) {
+                    item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+                } else if (column == 1) {
+                    item->setToolTip(
+                        QStringLiteral("Enter a numeric expression to update the value."));
+                }
+                parameterTable_->setItem(row, column, item);
             }
         }
+    }
+
+    void applyProjectParameterValues() {
+        rfsim::OemProjectDocument project;
+        project.solids = objects_;
+        project.parameters = geometryParameters_;
+        project.materials = geometryMaterials_;
+        project.featureHistory = geometryHistory_;
+        rfsim::applyOemParameterValues(&project);
+        objects_ = std::move(project.solids);
+        geometryParameters_ = std::move(project.parameters);
+        geometryMaterials_ = std::move(project.materials);
+        geometryHistory_ = std::move(project.featureHistory);
+    }
+
+    void updateProjectParameter(QTableWidgetItem* item) {
+        if (!item) return;
+        const QString id = item->data(Qt::UserRole).toString();
+        auto parameter = std::find_if(
+            geometryParameters_.begin(), geometryParameters_.end(),
+            [&id](const rfsim::OemParameter& value) {
+                return value.id == id;
+            });
+        if (parameter == geometryParameters_.end()) return;
+
+        const QString text = item->text().trimmed();
+        if ((item->column() == 0 || item->column() == 3) && text.isEmpty()) {
+            updateParameterList();
+            statusBar()->showMessage(
+                QStringLiteral("Parameter name and unit cannot be empty."));
+            return;
+        }
+        if (item->column() == 0) {
+            parameter->name = text;
+        } else if (item->column() == 1 || item->column() == 2) {
+            bool ok = false;
+            const double value = text.toDouble(&ok);
+            if (!ok || !std::isfinite(value) ||
+                (parameter->optimizable &&
+                 (value < parameter->minimum || value > parameter->maximum))) {
+                updateParameterList();
+                statusBar()->showMessage(
+                    QStringLiteral("Enter a finite numeric value within the parameter bounds."));
+                return;
+            }
+            if (item->column() == 1) {
+                parameter->expression = text;
+            } else {
+                bool expressionIsNumeric = false;
+                parameter->expression.toDouble(&expressionIsNumeric);
+                if (expressionIsNumeric) {
+                    parameter->expression =
+                        QString::number(value, 'g', 17);
+                }
+            }
+            parameter->evaluatedValue = value;
+        } else if (item->column() == 3) {
+            parameter->unit = text;
+        } else {
+            updateParameterList();
+            return;
+        }
+
+        const int selectedRow = currentObjectIndex();
+        QWidget* currentPage = workspace_->currentWidget();
+        try {
+            applyProjectParameterValues();
+        } catch (const std::exception& exception) {
+            updateParameterList();
+            statusBar()->showMessage(
+                QStringLiteral("Cannot apply parameter: %1")
+                    .arg(QString::fromUtf8(exception.what())));
+            return;
+        }
+        refreshList(selectedRow);
+        loadSelected();
+        loadSelectedMaterial();
+        workspace_->setCurrentWidget(currentPage);
+        updateParameterList();
+        statusBar()->showMessage(QStringLiteral("Project parameter updated."));
     }
 
     bool loadProjectResultGraphs(const QString& directory, QString* error) {
@@ -3304,6 +3429,169 @@ private:
         }
     }
 
+    void refreshProjectMaterialList() {
+        const QSignalBlocker blocker(projectMaterialsList_);
+        projectMaterialsList_->clearContents();
+        projectMaterialsList_->setRowCount(
+            static_cast<int>(geometryMaterials_.size()));
+        for (size_t index = 0; index < geometryMaterials_.size(); ++index) {
+            const auto& material = geometryMaterials_[index];
+            const int row = static_cast<int>(index);
+            const auto makeItem = [&material](const QString& text) {
+                auto* item = new QTableWidgetItem(text);
+                item->setData(Qt::UserRole, material.id);
+                return item;
+            };
+            projectMaterialsList_->setItem(
+                row, 0, makeItem(material.name));
+            projectMaterialsList_->setItem(
+                row, 1, makeItem(material.type));
+            projectMaterialsList_->setItem(
+                row, 2, makeItem(QString::number(
+                            material.relativePermittivity, 'g', 10)));
+            projectMaterialsList_->setItem(
+                row, 3, makeItem(QString::number(
+                            material.conductivitySPerM, 'g', 10)));
+            projectMaterialsList_->setItem(
+                row, 4, makeItem(QString::number(
+                            material.lossTangent, 'g', 10)));
+        }
+    }
+
+    void updateProjectMaterial(QTableWidgetItem* item) {
+        if (!item || item->row() < 0 ||
+            item->row() >= projectMaterialsList_->rowCount()) {
+            return;
+        }
+        const QString materialId =
+            item->data(Qt::UserRole).toString();
+        auto material = std::find_if(
+            geometryMaterials_.begin(), geometryMaterials_.end(),
+            [&materialId](const rfsim::OemMaterial& value) {
+                return value.id == materialId;
+            });
+        if (material == geometryMaterials_.end()) return;
+
+        const auto rejectEdit = [this](const QString& message) {
+            refreshProjectMaterialList();
+            statusBar()->showMessage(message);
+        };
+        const QString text = item->text().trimmed();
+        if (item->column() == 0) {
+            if (text.isEmpty()) {
+                rejectEdit(QStringLiteral("Material name cannot be empty."));
+                return;
+            }
+            material->name = text;
+        } else if (item->column() == 1) {
+            const QString type = text.toLower();
+            if (type != QStringLiteral("pec") &&
+                type != QStringLiteral("dielectric")) {
+                rejectEdit(QStringLiteral("Material type must be PEC or dielectric."));
+                return;
+            }
+            material->type = type;
+        } else {
+            bool ok = false;
+            const double value = text.toDouble(&ok);
+            const double minimum = item->column() == 2 ? 1.0 : 0.0;
+            const double maximum = item->column() == 2
+                ? 1000.0
+                : item->column() == 3 ? 1.0e8 : 10.0;
+            if (!ok || !std::isfinite(value) ||
+                value < minimum || value > maximum) {
+                rejectEdit(QStringLiteral("Material property value is outside its valid range."));
+                return;
+            }
+            const QString argumentName = item->column() == 2
+                ? QStringLiteral("relative-permittivity")
+                : item->column() == 3
+                    ? QStringLiteral("conductivity")
+                    : QStringLiteral("loss-tangent");
+            for (const auto& feature : geometryHistory_) {
+                if (feature.materialRef != materialId) continue;
+                for (const auto& argument : feature.arguments) {
+                    const QString name = argument.name;
+                    const bool matches = name == argumentName ||
+                        (argumentName == QStringLiteral("relative-permittivity") &&
+                         name == QStringLiteral("relative_permittivity")) ||
+                        (argumentName == QStringLiteral("loss-tangent") &&
+                         name == QStringLiteral("loss_tangent"));
+                    if (!matches || argument.parameterRef.isEmpty()) continue;
+                    const auto parameter = std::find_if(
+                        geometryParameters_.begin(), geometryParameters_.end(),
+                        [&argument](const rfsim::OemParameter& candidate) {
+                            return candidate.id == argument.parameterRef;
+                        });
+                    if (parameter != geometryParameters_.end() &&
+                        parameter->optimizable &&
+                        (value < parameter->minimum ||
+                         value > parameter->maximum)) {
+                        rejectEdit(
+                            QStringLiteral("Material value is outside a linked design-variable range."));
+                        return;
+                    }
+                }
+            }
+            if (item->column() == 2) {
+                material->relativePermittivity = value;
+            } else if (item->column() == 3) {
+                material->conductivitySPerM = value;
+            } else {
+                material->lossTangent = value;
+            }
+            for (auto& feature : geometryHistory_) {
+                if (feature.materialRef != materialId) continue;
+                for (auto& argument : feature.arguments) {
+                    const QString name = argument.name;
+                    const bool matches = name == argumentName ||
+                        (argumentName == QStringLiteral("relative-permittivity") &&
+                         name == QStringLiteral("relative_permittivity")) ||
+                        (argumentName == QStringLiteral("loss-tangent") &&
+                         name == QStringLiteral("loss_tangent"));
+                    if (!matches) continue;
+                    argument.expression = QString::number(value, 'g', 17);
+                    argument.evaluatedValue = value;
+                    auto parameter = std::find_if(
+                        geometryParameters_.begin(), geometryParameters_.end(),
+                        [&argument](const rfsim::OemParameter& candidate) {
+                            return candidate.id == argument.parameterRef;
+                        });
+                    if (parameter != geometryParameters_.end()) {
+                        parameter->expression = argument.expression;
+                        parameter->evaluatedValue = value;
+                    }
+                }
+            }
+        }
+
+        for (auto& object : objects_) {
+            if (QString::fromStdString(object.materialId) != materialId) continue;
+            object.material = material->type == QStringLiteral("dielectric")
+                ? rfsim::MaterialKind::Dielectric
+                : rfsim::MaterialKind::PerfectConductor;
+            object.relativePermittivity = material->relativePermittivity;
+            object.conductivity = material->conductivitySPerM;
+            object.lossTangent = material->lossTangent;
+        }
+
+        const int selectedRow = currentObjectIndex();
+        QWidget* currentPage = workspace_->currentWidget();
+        try {
+            applyProjectParameterValues();
+        } catch (const std::exception& exception) {
+            rejectEdit(QStringLiteral("Cannot apply material edit: %1")
+                           .arg(QString::fromUtf8(exception.what())));
+            return;
+        }
+        refreshList(selectedRow);
+        loadSelected();
+        loadSelectedMaterial();
+        workspace_->setCurrentWidget(currentPage);
+        updateParameterList();
+        statusBar()->showMessage(QStringLiteral("Project material updated."));
+    }
+
     void refreshList(int row) {
         objectsList_->clear();
         auto* geometry = new QTreeWidgetItem(objectsList_,
@@ -3338,27 +3626,12 @@ private:
         }
         auto* materials = new QTreeWidgetItem(objectsList_,
                                                {QStringLiteral("Materials")});
-        projectMaterialsList_->clear();
         if (!geometryMaterials_.empty()) {
             for (const auto& material : geometryMaterials_) {
                 const QString label =
                     QStringLiteral("%1 — %2").arg(material.name, material.type);
                 auto* item = new QTreeWidgetItem(materials, {label});
-                auto* details = new QTreeWidgetItem(projectMaterialsList_, {label});
                 item->setToolTip(0, material.id);
-                details->setToolTip(0, material.id);
-                new QTreeWidgetItem(
-                    details,
-                    {QStringLiteral("εr = %1")
-                         .arg(material.relativePermittivity, 0, 'g', 8)});
-                new QTreeWidgetItem(
-                    details,
-                    {QStringLiteral("σ = %1 S/m")
-                         .arg(material.conductivitySPerM, 0, 'g', 8)});
-                new QTreeWidgetItem(
-                    details,
-                    {QStringLiteral("tanδ = %1")
-                         .arg(material.lossTangent, 0, 'g', 8)});
             }
         } else {
             for (size_t i = 0; i < objects_.size(); ++i) {
@@ -3371,9 +3644,9 @@ private:
                          : QStringLiteral("Dielectric"));
                 auto* item = new QTreeWidgetItem(materials, {label});
                 item->setData(0, Qt::UserRole, static_cast<int>(i));
-                new QTreeWidgetItem(projectMaterialsList_, {label});
             }
         }
+        refreshProjectMaterialList();
         auto* excitations = new QTreeWidgetItem(objectsList_,
                                                  {QStringLiteral("Excitations")});
         auto* port = new QTreeWidgetItem(
@@ -3751,7 +4024,7 @@ private:
     bool gridVisible_ = true;
     QStackedWidget* workspace_ = nullptr;
     QWidget* resultsPage_ = nullptr;
-    QTreeWidget* projectMaterialsList_ = nullptr;
+    QTableWidget* projectMaterialsList_ = nullptr;
     QTreeWidget* projectResultsList_ = nullptr;
     QTreeWidget* objectsList_ = nullptr;
     QWidget* navigationPanel_ = nullptr;

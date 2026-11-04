@@ -83,6 +83,7 @@ struct OemProjectDocument {
     QMap<QString, QByteArray> resultFiles;
 };
 
+void applyOemParameterValues(OemProjectDocument* project);
 bool writeOemProject(const QString& path, const OemProjectDocument& project,
                      QString* error);
 bool readOemProject(const QString& path, OemProjectDocument* project,

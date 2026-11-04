@@ -590,7 +590,7 @@ void parseDesign(QXmlStreamReader& reader, OemProjectDocument* project,
     }
 }
 
-void applyEvaluatedParameters(OemProjectDocument* project) {
+void applyEvaluatedParametersInternal(OemProjectDocument* project) {
     QMap<QString, double> values;
     for (const auto& parameter : project->parameters) {
         values.insert(parameter.id, parameter.evaluatedValue);
@@ -610,6 +610,15 @@ void applyEvaluatedParameters(OemProjectDocument* project) {
                                 .arg(feature.id, argument.parameterRef));
                 }
                 value = parameter.value();
+                const auto parameterData = std::find_if(
+                    project->parameters.begin(), project->parameters.end(),
+                    [&argument](const OemParameter& item) {
+                        return item.id == argument.parameterRef;
+                    });
+                if (parameterData != project->parameters.end()) {
+                    argument.expression = parameterData->expression;
+                    argument.unit = parameterData->unit;
+                }
                 argument.evaluatedValue = value;
             }
             if (solid != project->solids.end()) {
@@ -941,6 +950,10 @@ void validateDesign(const OemProjectDocument& project) {
 
 }  // namespace
 
+void applyOemParameterValues(OemProjectDocument* project) {
+    applyEvaluatedParametersInternal(project);
+}
+
 bool writeOemProject(const QString& path, const OemProjectDocument& project,
                      QString* error) {
     try {
@@ -1129,7 +1142,7 @@ bool readOemProject(const QString& path, OemProjectDocument* project,
                 }
             }
         }
-        applyEvaluatedParameters(&loaded);
+        applyOemParameterValues(&loaded);
         validateDesign(loaded);
         for (const auto& solid : loaded.solids) validateSolid(solid);
         validateSimulation(loaded.simulation);

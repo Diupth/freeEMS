@@ -32,8 +32,9 @@ Các vùng chính:
   hiển thị bằng bounding-box proxy; solver và xuất STEP sử dụng B-Rep thật.
 - **Panel trung tâm:** mặc định hiển thị 3D Viewport; schematic tạm thời không
   hiển thị.
-- **Parameter List:** bảng chỉ đọc các biến hình học/vật liệu của project;
-  các biến này được lưu và nạp cùng file `.oem`.
+- **Parameter List:** danh sách biến geometry/vật liệu của project. Double-click
+  các ô Name, Expression, Value hoặc Unit để chỉnh sửa; thay đổi được lưu cùng
+  file `.oem`.
 - **Progress / Messages:** trạng thái, progress indicator, log và lỗi solver.
 - **Status Bar:** trạng thái ứng dụng và đơn vị hiện dùng (mm, GHz, ns, deg).
 
@@ -99,6 +100,8 @@ Grid bật/tắt ở tab View; Fit View tự căn khung theo kích thước mô 
 3. Chọn **Perfect conductor (PEC)** hoặc **Dielectric**.
 4. Với điện môi, nhập relative permittivity εr, conductivity σ (S/m) và
    loss tangent tanδ.
+5. Có thể chỉnh sửa trực tiếp danh sách vật liệu của project; các giá trị được
+   lưu trong file `.oem`.
 
 Mỗi solid hiện dùng vật liệu đồng nhất, đẳng hướng. Chưa có vật liệu phụ
 thuộc tần số, tensor, từ thẩm tùy chỉnh hoặc thư viện vật liệu mở rộng.
