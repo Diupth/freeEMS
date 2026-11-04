@@ -176,6 +176,8 @@ public:
         update();
     }
 
+    bool hasData() const { return !points_.empty(); }
+
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
@@ -512,6 +514,12 @@ public:
                               relativePermittivity_);
         materialsForm->addRow(QStringLiteral("Conductivity σ"), conductivity_);
         materialsForm->addRow(QStringLiteral("Loss tangent tanδ"), lossTangent_);
+        materialsLayout->addWidget(
+            new QLabel(QStringLiteral("Materials in this project")));
+        projectMaterialsList_ = new QTreeWidget;
+        projectMaterialsList_->setHeaderHidden(true);
+        projectMaterialsList_->setMaximumHeight(150);
+        materialsLayout->addWidget(projectMaterialsList_);
         materialsLayout->addLayout(materialsForm);
         materialsLayout->addWidget(new QLabel(
             QStringLiteral("Dielectric conductivity and loss tangent are converted to openEMS electric loss (κ) at the band center. PEC ignores these values.")));
@@ -600,7 +608,7 @@ public:
         workspace_->addWidget(simulationScroll);
         workspace_->setMinimumSize(0, 0);
 
-        parameterTable_ = new QTableWidget(8, 5);
+        parameterTable_ = new QTableWidget(0, 5);
         parameterTable_->setHorizontalHeaderLabels(
             {QStringLiteral("Name"), QStringLiteral("Expression"),
              QStringLiteral("Value"), QStringLiteral("Unit"),
@@ -613,6 +621,9 @@ public:
         updateParameterList();
         resultsPage_ = new QWidget;
         auto* resultsLayout = new QVBoxLayout(resultsPage_);
+        projectResultsList_ = new QTreeWidget;
+        projectResultsList_->setHeaderHidden(true);
+        resultPlots_->addTab(projectResultsList_, QStringLiteral("Project Files"));
         // Hidden helper: the ribbon/menu "Open Results Folder" actions trigger it.
         auto* openResultsButton = new QPushButton(resultsPage_);
         openResultsButton->hide();
@@ -990,6 +1001,7 @@ public:
             addArgument(pointName + QStringLiteral("_z"), QStringLiteral("mm"),
                         point.z);
         }
+        updateParameterList();
     }
 
     void startSimulationForSmokeTest() {
@@ -1239,6 +1251,12 @@ public:
         bool roundTripOkay =
             loaded && objects_.size() == originalObjects.size() &&
             frequencyStart_->value() == originalFrequency &&
+            !geometryParameters_.empty() &&
+            parameterTable_->rowCount() ==
+                static_cast<int>(geometryParameters_.size()) &&
+            parameterTable_->item(0, 0) &&
+            parameterTable_->item(0, 0)->text() ==
+                geometryParameters_.front().name &&
             objects_[1].kind == rfsim::SolidKind::Curve &&
             objects_[1].curvePoints.size() == 3 &&
             objects_[3].kind == rfsim::SolidKind::Surface &&
@@ -1306,9 +1324,28 @@ public:
             findChild<QMenu*>(QStringLiteral("solverMenu"));
         const QMenu* domainMenu =
             findChild<QMenu*>(QStringLiteral("domainMenu"));
+        const bool projectSectionsPopulated =
+            objectsList_->topLevelItemCount() == 4 &&
+            objectsList_->topLevelItem(0)->childCount() > 0 &&
+            objectsList_->topLevelItem(1)->childCount() > 0 &&
+            objectsList_->topLevelItem(2)->childCount() > 0 &&
+            objectsList_->topLevelItem(3)->childCount() > 0 &&
+            projectMaterialsList_->topLevelItemCount() > 0 &&
+            projectResultsList_->topLevelItemCount() > 0;
+        const bool projectParametersPopulated =
+            !geometryParameters_.empty() &&
+            parameterTable_->rowCount() ==
+                static_cast<int>(geometryParameters_.size()) &&
+            parameterTable_->item(0, 0) &&
+            parameterTable_->item(0, 0)->text() ==
+                geometryParameters_.front().name;
+        const bool resultGraphsVisible =
+            s11Plot_->hasData() || vswrPlot_->hasData() || wavePlot_->hasData();
         smokeTestExitCode_ =
             loaded && !solverFiles_.isEmpty() &&
-                    !objects_.empty() &&
+                    projectSectionsPopulated &&
+                    projectParametersPopulated &&
+                    resultGraphsVisible &&
                     workspace_->currentWidget() == workspace_->widget(0) &&
                     solverSelectionButton_ &&
                     solverSelectionButton_->text() == QStringLiteral("openEMS") &&
@@ -1336,6 +1373,20 @@ public:
                 : 1;
         if (!loaded) log_->appendPlainText(error);
         QApplication::quit();
+    }
+
+    void startOpenProjectSimulationSmokeTest(const QString& path,
+                                             const QString& output) {
+        smokeTestMode_ = true;
+        QString error;
+        const bool loaded = !path.isEmpty() && loadProjectFile(path, &error);
+        if (!loaded || objects_.empty() || !validPortCoordinates()) {
+            smokeTestExitCode_ = 1;
+            if (!error.isEmpty()) log_->appendPlainText(error);
+            QApplication::quit();
+            return;
+        }
+        runSimulation(output);
     }
 
     void startCancelSmokeTest() {
@@ -2395,53 +2446,127 @@ private:
     }
 
     void updateParameterList() {
-        const QString start =
-            QString::number(frequencyStart_->value(), 'g', 6);
-        const QString stop =
-            QString::number(frequencyStop_->value(), 'g', 6);
-        const QString portExpression =
-            QStringLiteral("%1: (%2,%3,%4) → (%5,%6,%7) mm")
-                .arg(portDirection_->currentData().toString())
-                .arg(portStartX_->value()).arg(portStartY_->value())
-                .arg(portStartZ_->value()).arg(portStopX_->value())
-                .arg(portStopY_->value()).arg(portStopZ_->value());
-        const QString portValue =
-            QStringLiteral("%1, %2 Ω")
-                .arg(portDirection_->currentData().toString())
-                .arg(portImpedance_->value());
-        const std::array<QStringList, 8> rows = {{
-            {QStringLiteral("model"), parameterModel_, parameterModel_,
-             QString(), QStringLiteral("Active CAD scene")},
-            {QStringLiteral("frequency_start"), start, start, QStringLiteral("GHz"),
-             QStringLiteral("Sweep lower bound")},
-            {QStringLiteral("frequency_stop"), stop, stop, QStringLiteral("GHz"),
-             QStringLiteral("Sweep upper bound")},
-            {QStringLiteral("frequency_points"),
-             QString::number(static_cast<int>(frequencyPoints_->value())),
-             QString::number(static_cast<int>(frequencyPoints_->value())),
-             QStringLiteral("points"), QStringLiteral("S-parameter sampling")},
-            {QStringLiteral("mesh_divisions"),
-             QString::number(static_cast<int>(meshDivisions_->value())),
-             QString::number(static_cast<int>(meshDivisions_->value())),
-             QStringLiteral("cells/λ"), QStringLiteral("Target spatial resolution")},
-            {QStringLiteral("maximum_timesteps"),
-             QString::number(static_cast<int>(maxTimesteps_->value())),
-             QString::number(static_cast<int>(maxTimesteps_->value())),
-             QStringLiteral("steps"), QStringLiteral("FDTD step limit")},
-            {QStringLiteral("boundary"), boundary_->currentData().toString(),
-             boundary_->currentData().toString(), QString(),
-             QStringLiteral("OpenEMS boundary condition")},
-            {QStringLiteral("port"), portExpression, portValue, QString(),
-             QStringLiteral("Configured lumped port")}
-        }};
-        for (int row = 0; row < static_cast<int>(rows.size()); ++row) {
-            for (int column = 0; column < rows[row].size(); ++column) {
-                if (!parameterTable_->item(row, column)) {
-                    parameterTable_->setItem(row, column, new QTableWidgetItem);
-                }
-                parameterTable_->item(row, column)->setText(rows[row][column]);
+        parameterTable_->clearContents();
+        if (geometryParameters_.empty()) {
+            parameterTable_->setRowCount(1);
+            parameterTable_->setItem(
+                0, 0, new QTableWidgetItem(QStringLiteral("No project parameters")));
+            return;
+        }
+
+        parameterTable_->setRowCount(
+            static_cast<int>(geometryParameters_.size()));
+        for (size_t index = 0; index < geometryParameters_.size(); ++index) {
+            const auto& parameter = geometryParameters_[index];
+            const int row = static_cast<int>(index);
+            QString description = parameter.role.isEmpty()
+                ? QStringLiteral("Project parameter")
+                : parameter.role;
+            if (parameter.optimizable) {
+                description += QStringLiteral(" (%1 to %2, step %3)")
+                                   .arg(parameter.minimum, 0, 'g', 8)
+                                   .arg(parameter.maximum, 0, 'g', 8)
+                                   .arg(parameter.step, 0, 'g', 8);
+            }
+            const std::array<QString, 5> values = {{
+                parameter.name,
+                parameter.expression,
+                QString::number(parameter.evaluatedValue, 'g', 10),
+                parameter.unit,
+                description
+            }};
+            for (int column = 0; column < static_cast<int>(values.size());
+                 ++column) {
+                parameterTable_->setItem(
+                    row, column, new QTableWidgetItem(values[column]));
             }
         }
+    }
+
+    bool loadProjectResultGraphs(const QString& directory, QString* error) {
+        s11Plot_->clear();
+        vswrPlot_->clear();
+        wavePlot_->clear();
+        for (const QString& name : projectResultFiles_.keys()) {
+            if (!name.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)) {
+                continue;
+            }
+            const QString path = QDir(directory).filePath(name);
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                if (error) {
+                    *error = QStringLiteral("Cannot read project result %1: %2")
+                                 .arg(name, file.errorString());
+                }
+                return false;
+            }
+            const QStringList headers =
+                QString::fromUtf8(file.readLine()).trimmed().split(',');
+            if (headers.size() < 2) continue;
+
+            const auto findColumn = [&headers](const QString& token,
+                                               int startColumn,
+                                               bool preferDb) {
+                int firstMatch = -1;
+                for (int column = startColumn; column < headers.size(); ++column) {
+                    const QString label = headers[column].trimmed().toLower();
+                    if (!label.contains(token)) continue;
+                    if (firstMatch < 0) firstMatch = column;
+                    if (preferDb && label.contains(QStringLiteral("db"))) {
+                        return column;
+                    }
+                }
+                return firstMatch;
+            };
+            const QString xHeader = headers.front().trimmed();
+            const QString xKey = xHeader.toLower();
+            const bool frequencyAxis = xKey.contains(QStringLiteral("frequency"));
+            const bool timeAxis = xKey.contains(QStringLiteral("time"));
+            const double xScale = frequencyAxis ? 1e-9 : timeAxis ? 1e9 : 1.0;
+            const QString xLabel = frequencyAxis
+                ? QStringLiteral("Frequency (GHz)")
+                : timeAxis ? QStringLiteral("Time (ns)") : xHeader;
+
+            const int s11Column =
+                findColumn(QStringLiteral("s11"), 1, true);
+            if (frequencyAxis && s11Column >= 0 && !s11Plot_->hasData()) {
+                const int s21Column =
+                    findColumn(QStringLiteral("s21"), 1, false);
+                s11Plot_->loadCsv(
+                    path, 0, s11Column, xScale, 1.0, s21Column,
+                    headers[s11Column].trimmed(),
+                    s21Column >= 0 ? headers[s21Column].trimmed() : QString());
+            }
+
+            const int vswrColumn =
+                findColumn(QStringLiteral("vswr"), 1, false);
+            if (frequencyAxis && vswrColumn >= 0 && !vswrPlot_->hasData()) {
+                int secondVswrColumn = findColumn(
+                    QStringLiteral("vswr"), vswrColumn + 1, false);
+                vswrPlot_->loadCsv(
+                    path, 0, vswrColumn, xScale, 1.0, secondVswrColumn,
+                    headers[vswrColumn].trimmed(),
+                    secondVswrColumn >= 0
+                        ? headers[secondVswrColumn].trimmed()
+                        : QString());
+            }
+
+            if (timeAxis && !wavePlot_->hasData()) {
+                int voltageColumn =
+                    findColumn(QStringLiteral("voltage"), 1, false);
+                if (voltageColumn < 0) voltageColumn = 1;
+                const int reflectedColumn =
+                    findColumn(QStringLiteral("reflected"),
+                               voltageColumn + 1, false);
+                wavePlot_->loadCsv(
+                    path, 0, voltageColumn, xScale, 1.0, reflectedColumn,
+                    headers[voltageColumn].trimmed(),
+                    reflectedColumn >= 0
+                        ? headers[reflectedColumn].trimmed()
+                        : QString());
+            }
+        }
+        return true;
     }
 
     void newProject() {
@@ -2494,7 +2619,6 @@ private:
         geometryHistory_.clear();
         geometryParameters_.clear();
         geometryMaterials_.clear();
-        parameterModel_ = QStringLiteral("CAD project");
         s11Plot_->clear();
         vswrPlot_->clear();
         wavePlot_->clear();
@@ -2502,7 +2626,6 @@ private:
         topViewEnabled_ = false;
         workspace_->setCurrentWidget(workspace_->widget(0));
         refreshList(-1);
-        parameterModel_ = QStringLiteral("CAD scene");
         loadSelected();
         loadSelectedMaterial();
         frequencyStart_->setValue(1.0);
@@ -2821,7 +2944,10 @@ private:
         resultDirectory_ = stagedResultPath;
         resultKind_ = project.resultKind;
         projectResultFiles_ = project.resultFiles;
-        parameterModel_ = QStringLiteral("CAD scene");
+        solverFiles_ = project.solverFiles;
+        geometryHistory_ = project.featureHistory;
+        geometryParameters_ = project.parameters;
+        geometryMaterials_ = project.materials;
         s11Plot_->clear();
         vswrPlot_->clear();
         wavePlot_->clear();
@@ -2833,26 +2959,23 @@ private:
         loadSelectedMaterial();
         updatePortVisualization();
         updateParameterList();
-        if (resultKind_ == QStringLiteral("cad") &&
-            QFileInfo::exists(stagedResults
-                                  ? stagedResults->filePath(QStringLiteral("s11_scene.csv"))
-                                  : QString()) &&
-            QFileInfo::exists(stagedResults
-                                  ? stagedResults->filePath(QStringLiteral("waveform_scene.csv"))
-                                  : QString())) {
-            s11Plot_->loadCsv(resultDirectory_ + QStringLiteral("/s11_scene.csv"),
-                              0, 3, 1e-9, 1.0);
-            wavePlot_->loadCsv(resultDirectory_ + QStringLiteral("/waveform_scene.csv"),
-                               0, 1, 1e9, 1.0, 2);
-            status_->setText(QStringLiteral("Project results loaded."));
+        if (!stagedResultPath.isEmpty() &&
+            !loadProjectResultGraphs(stagedResultPath, error)) {
+            return false;
+        }
+        if (s11Plot_->hasData()) {
+            status_->setText(QStringLiteral("Project result graphs loaded."));
+            resultPlots_->setCurrentWidget(s11Plot_);
+        } else if (vswrPlot_->hasData()) {
+            resultPlots_->setCurrentWidget(vswrPlot_);
+        } else if (wavePlot_->hasData()) {
+            resultPlots_->setCurrentWidget(wavePlot_);
+        } else if (!projectResultFiles_.isEmpty()) {
+            resultPlots_->setCurrentWidget(projectResultsList_);
         }
         workspace_->setCurrentWidget(workspace_->widget(0));
         projectResultsTempDir_ = std::move(stagedResults);
         simulationResultsTempDir_.reset();
-        solverFiles_ = project.solverFiles;
-        geometryHistory_ = project.featureHistory;
-        geometryParameters_ = project.parameters;
-        geometryMaterials_ = project.materials;
         return true;
     }
 
@@ -3192,20 +3315,109 @@ private:
                            QStringLiteral(" — ") + kindName(object.kind)});
             item->setData(0, Qt::UserRole, static_cast<int>(i));
         }
+        if (objects_.empty()) {
+            for (const auto& feature : geometryHistory_) {
+                const QString label = feature.type.isEmpty()
+                    ? feature.id
+                    : feature.type;
+                auto* featureItem = new QTreeWidgetItem(
+                    geometry, {label + QStringLiteral(" — ") +
+                               feature.outputKind});
+                featureItem->setToolTip(0, feature.id);
+                for (const auto& argument : feature.arguments) {
+                    const QString value = argument.expression.isEmpty()
+                        ? QString::number(argument.evaluatedValue, 'g', 8)
+                        : argument.expression;
+                    new QTreeWidgetItem(
+                        featureItem,
+                        {QStringLiteral("%1 = %2 %3")
+                             .arg(argument.name, value, argument.unit)
+                             .trimmed()});
+                }
+            }
+        }
         auto* materials = new QTreeWidgetItem(objectsList_,
                                                {QStringLiteral("Materials")});
-        for (size_t i = 0; i < objects_.size(); ++i) {
-            auto* item = new QTreeWidgetItem(
-                materials, {QString::fromStdString(objects_[i].name)});
-            item->setData(0, Qt::UserRole, static_cast<int>(i));
+        projectMaterialsList_->clear();
+        if (!geometryMaterials_.empty()) {
+            for (const auto& material : geometryMaterials_) {
+                const QString label =
+                    QStringLiteral("%1 — %2").arg(material.name, material.type);
+                auto* item = new QTreeWidgetItem(materials, {label});
+                auto* details = new QTreeWidgetItem(projectMaterialsList_, {label});
+                item->setToolTip(0, material.id);
+                details->setToolTip(0, material.id);
+                new QTreeWidgetItem(
+                    details,
+                    {QStringLiteral("εr = %1")
+                         .arg(material.relativePermittivity, 0, 'g', 8)});
+                new QTreeWidgetItem(
+                    details,
+                    {QStringLiteral("σ = %1 S/m")
+                         .arg(material.conductivitySPerM, 0, 'g', 8)});
+                new QTreeWidgetItem(
+                    details,
+                    {QStringLiteral("tanδ = %1")
+                         .arg(material.lossTangent, 0, 'g', 8)});
+            }
+        } else {
+            for (size_t i = 0; i < objects_.size(); ++i) {
+                const auto& object = objects_[i];
+                const QString label =
+                    QString::fromStdString(object.name) +
+                    QStringLiteral(" — ") +
+                    (object.material == rfsim::MaterialKind::PerfectConductor
+                         ? QStringLiteral("PEC")
+                         : QStringLiteral("Dielectric"));
+                auto* item = new QTreeWidgetItem(materials, {label});
+                item->setData(0, Qt::UserRole, static_cast<int>(i));
+                new QTreeWidgetItem(projectMaterialsList_, {label});
+            }
         }
         auto* excitations = new QTreeWidgetItem(objectsList_,
                                                  {QStringLiteral("Excitations")});
-        new QTreeWidgetItem(excitations, {QStringLiteral("Lumped port (X/Y/Z)")});
+        auto* port = new QTreeWidgetItem(
+            excitations,
+            {QStringLiteral("Lumped port — %1")
+                 .arg(portDirection_->currentData().toString().toUpper())});
+        new QTreeWidgetItem(
+            port, {QStringLiteral("Start: (%1, %2, %3) mm")
+                       .arg(portStartX_->value())
+                       .arg(portStartY_->value())
+                       .arg(portStartZ_->value())});
+        new QTreeWidgetItem(
+            port, {QStringLiteral("Stop: (%1, %2, %3) mm")
+                       .arg(portStopX_->value())
+                       .arg(portStopY_->value())
+                       .arg(portStopZ_->value())});
+        new QTreeWidgetItem(
+            port, {QStringLiteral("Impedance: %1 Ω")
+                       .arg(portImpedance_->value())});
+        for (const QString& assetPath : solverFiles_.keys()) {
+            const QString assetName = QFileInfo(assetPath).fileName();
+            if (assetName.contains(QStringLiteral("port"), Qt::CaseInsensitive)) {
+                new QTreeWidgetItem(
+                    excitations,
+                    {QStringLiteral("Solver asset: %1").arg(assetPath)});
+            }
+        }
         auto* results = new QTreeWidgetItem(objectsList_,
                                              {QStringLiteral("Results")});
-        if (!resultDirectory_.isEmpty()) {
-            new QTreeWidgetItem(results, {QStringLiteral("Simulation results")});
+        projectResultsList_->clear();
+        QStringList resultNames = projectResultFiles_.keys();
+        if (resultNames.isEmpty() && !resultDirectory_.isEmpty() &&
+            QFileInfo(resultDirectory_).isDir()) {
+            resultNames = QDir(resultDirectory_).entryList(
+                QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+        }
+        for (const QString& name : resultNames) {
+            const auto result = projectResultFiles_.constFind(name);
+            const QString sizeLabel = result == projectResultFiles_.cend()
+                ? QString()
+                : QStringLiteral(" (%1 bytes)").arg(result->size());
+            const QString label = name + sizeLabel;
+            new QTreeWidgetItem(results, {label});
+            new QTreeWidgetItem(projectResultsList_, {label});
         }
         objectsList_->expandAll();
         if (row >= 0 && row < static_cast<int>(objects_.size())) {
@@ -3469,7 +3681,6 @@ private:
             solverFiles_.clear();
             projectResultFiles_.clear();
             resultKind_ = QStringLiteral("cad");
-            parameterModel_ = QStringLiteral("CAD scene");
             updateParameterList();
             log_->clear();
             status_->setText(QStringLiteral("Running openEMS on %1 CAD solid(s)…")
@@ -3536,11 +3747,12 @@ private:
     std::vector<rfsim::OemMaterial> geometryMaterials_;
     std::vector<rfsim::OemFeature> geometryHistory_;
     QString resultKind_ = QStringLiteral("none");
-    QString parameterModel_ = QStringLiteral("CAD scene");
     bool topViewEnabled_ = false;
     bool gridVisible_ = true;
     QStackedWidget* workspace_ = nullptr;
     QWidget* resultsPage_ = nullptr;
+    QTreeWidget* projectMaterialsList_ = nullptr;
+    QTreeWidget* projectResultsList_ = nullptr;
     QTreeWidget* objectsList_ = nullptr;
     QWidget* navigationPanel_ = nullptr;
     QDockWidget* navigationDock_ = nullptr;
@@ -3645,6 +3857,14 @@ int main(int argc, char* argv[]) {
         QTimer::singleShot(0, &window, [&window, path] {
             window.startOpenProjectSmokeTest(path);
         });
+    } else if (mode == QStringLiteral("--smoke-open-project-run")) {
+        const QString path =
+            argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString();
+        const QString output =
+            argc > 3 ? QString::fromLocal8Bit(argv[3]) : QString();
+        QTimer::singleShot(0, &window, [&window, path, output] {
+            window.startOpenProjectSimulationSmokeTest(path, output);
+        });
     } else if (mode == QStringLiteral("--smoke-cancel")) {
         QTimer::singleShot(0, &window, [&window] {
             window.startCancelSmokeTest();
@@ -3659,6 +3879,7 @@ int main(int argc, char* argv[]) {
         mode == QStringLiteral("--smoke-project-io") ||
         mode == QStringLiteral("--smoke-empty-startup") ||
         mode == QStringLiteral("--smoke-open-project") ||
+        mode == QStringLiteral("--smoke-open-project-run") ||
         mode == QStringLiteral("--smoke-cancel")) {
         return window.smokeTestExitCode();
     }

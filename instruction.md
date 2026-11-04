@@ -32,7 +32,8 @@ Các vùng chính:
   hiển thị bằng bounding-box proxy; solver và xuất STEP sử dụng B-Rep thật.
 - **Panel trung tâm:** mặc định hiển thị 3D Viewport; schematic tạm thời không
   hiển thị.
-- **Parameter List:** bảng chỉ đọc các thông số mô phỏng đang dùng.
+- **Parameter List:** bảng chỉ đọc các biến hình học/vật liệu của project;
+  các biến này được lưu và nạp cùng file `.oem`.
 - **Progress / Messages:** trạng thái, progress indicator, log và lỗi solver.
 - **Status Bar:** trạng thái ứng dụng và đơn vị hiện dùng (mm, GHz, ns, deg).
 
@@ -144,8 +145,8 @@ Mở tab **Results**:
 
 Các file OEM mẫu cũ được giữ làm dữ liệu kiểm thử; hình học và tham số được
 đọc từ project, không được dựng sẵn trong ứng dụng. Ứng dụng hiện chưa có
-trình hiển thị kết quả chuyên biệt cho các định dạng kết quả trong những file
-mẫu đó.
+trình hiển thị chuyên biệt cho trường gần/xa; các CSV có trục tần số/thời gian
+và cột S-parameter, VSWR hoặc điện áp được nhận diện để vẽ đồ thị chung.
 
 Smith Chart, trường E/H thể tích 3D, transient animation, surface current,
 Poynting vector và far-field cho scene CAD tùy ý chưa được triển khai. Không

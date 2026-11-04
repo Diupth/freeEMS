@@ -194,6 +194,12 @@ void ModelView::paintEvent(QPaintEvent*) {
                        y - (minY + maxY) * 0.5, z, scale);
     };
 
+    if (objects_.empty()) {
+        painter.setPen(QColor(105, 115, 128));
+        painter.drawText(rect().adjusted(20, 20, -20, -20), Qt::AlignCenter,
+                         QStringLiteral("No explicit solid geometry is stored in this project."));
+    }
+
     if (showGrid_ && topView_) {
         painter.setPen(QPen(QColor(220, 226, 233), 1));
         const double gridStep = 10.0;
@@ -356,14 +362,16 @@ void ModelView::paintEvent(QPaintEvent*) {
                          QString::fromStdString(object.name));
     }
 
-    const QPointF start = point(portStartX_, portStartY_, portStartZ_);
-    const QPointF stop = point(portStopX_, portStopY_, portStopZ_);
-    painter.setPen(QPen(QColor(192, 67, 45), 3));
-    painter.drawLine(start, stop);
-    painter.drawLine(start + QPointF(-6, -6), start + QPointF(6, 6));
-    painter.drawLine(start + QPointF(-6, 6), start + QPointF(6, -6));
-    painter.setPen(QColor(128, 45, 37));
-    painter.drawText(stop + QPointF(8, -8), QStringLiteral("Lumped Port"));
+    if (!objects_.empty()) {
+        const QPointF start = point(portStartX_, portStartY_, portStartZ_);
+        const QPointF stop = point(portStopX_, portStopY_, portStopZ_);
+        painter.setPen(QPen(QColor(192, 67, 45), 3));
+        painter.drawLine(start, stop);
+        painter.drawLine(start + QPointF(-6, -6), start + QPointF(6, 6));
+        painter.drawLine(start + QPointF(-6, 6), start + QPointF(6, -6));
+        painter.setPen(QColor(128, 45, 37));
+        painter.drawText(stop + QPointF(8, -8), QStringLiteral("Lumped Port"));
+    }
     if (curveDrawing_) {
         QPolygonF curve;
         for (const auto& point : curveScreenPoints_) curve.append(point);

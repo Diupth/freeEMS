@@ -114,6 +114,8 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
     rfsim::OemProjectDocument project;
     project.resultKind = QStringLiteral("waveguide");
     auto& simulation = project.simulation;
+    simulation.frequencyStartGHz = 8.2;
+    simulation.frequencyStopGHz = 12.4;
     simulation.frequencyPoints = 201;
     simulation.meshDivisions = 30;
     simulation.maximumTimesteps = 20000;
@@ -122,6 +124,14 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
     constexpr double height = 10.16;
     constexpr double length = 100.0;
     constexpr double portDepth = 5.0;
+    constexpr double wallThickness = 1.27;
+    simulation.portAxis = QStringLiteral("y");
+    simulation.portStartXmm = width / 2.0;
+    simulation.portStartYmm = 0.0;
+    simulation.portStartZmm = 0.0;
+    simulation.portStopXmm = width / 2.0;
+    simulation.portStopYmm = height;
+    simulation.portStopZmm = 0.0;
 
     project.materials.push_back(
         {QStringLiteral("mat-waveguide-wall"), QStringLiteral("Waveguide wall"),
@@ -148,6 +158,42 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
     addWaveguideValue(QStringLiteral("port-depth"),
                       portDepth, 2.0, 10.0);
     project.featureHistory.push_back(std::move(waveguide));
+
+    const auto addWall = [&](const QString& id, const QString& name,
+                             double x, double y,
+                             double wallLength, double wallWidth) {
+        rfsim::SolidObject wall;
+        wall.id = id.toStdString();
+        wall.name = name.toStdString();
+        wall.kind = rfsim::SolidKind::Box;
+        wall.featureType = "primitive.box";
+        wall.materialId = "mat-waveguide-wall";
+        wall.material = rfsim::MaterialKind::PerfectConductor;
+        wall.x = x;
+        wall.y = y;
+        wall.length = wallLength;
+        wall.width = wallWidth;
+        wall.height = length;
+        project.solids.push_back(wall);
+
+        rfsim::OemFeature feature;
+        feature.id = id;
+        feature.type = QStringLiteral("primitive.box");
+        feature.outputId = id;
+        feature.outputKind = QStringLiteral("solid");
+        feature.materialRef = QStringLiteral("mat-waveguide-wall");
+        project.featureHistory.push_back(std::move(feature));
+    };
+    const double outsideWidth = width + 2.0 * wallThickness;
+    addWall(QStringLiteral("waveguide-wall-bottom"),
+            QStringLiteral("Bottom wall"), -wallThickness, -wallThickness,
+            outsideWidth, wallThickness);
+    addWall(QStringLiteral("waveguide-wall-top"), QStringLiteral("Top wall"),
+            -wallThickness, height, outsideWidth, wallThickness);
+    addWall(QStringLiteral("waveguide-wall-left"), QStringLiteral("Left wall"),
+            -wallThickness, 0.0, wallThickness, height);
+    addWall(QStringLiteral("waveguide-wall-right"), QStringLiteral("Right wall"),
+            width, 0.0, wallThickness, height);
 
     readSolverFiles(outputDirectory, &project);
     readDerivedResults(

@@ -87,6 +87,17 @@ if(BUILD_TESTING)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     )
     if(EXISTS "${OPENEMS_PYTHON_DEFAULT}")
+        add_test(
+            NAME gui_waveguide_oem_run_smoke
+            COMMAND rf_sim_gui --smoke-open-project-run
+                    "${CMAKE_CURRENT_SOURCE_DIR}/waveguide.oem"
+                    "${CMAKE_BINARY_DIR}/artifacts/waveguide-oem-run-smoke"
+        )
+        set_tests_properties(
+            gui_waveguide_oem_run_smoke
+            PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        )
         set(REFERENCE_WR90_DIR "${CMAKE_BINARY_DIR}/artifacts/reference_wr90")
         set(REFERENCE_WR90_TE20_DIR "${CMAKE_BINARY_DIR}/artifacts/reference_wr90_te20")
         set(REFERENCE_ANTENNA_DIR "${CMAKE_BINARY_DIR}/artifacts/reference_antenna")
