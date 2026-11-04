@@ -386,19 +386,14 @@ public:
         auto* left = new QWidget;
         navigationPanel_ = left;
         auto* leftLayout = new QVBoxLayout(left);
-        auto* addRow = new QHBoxLayout;
-        auto* addPlate = new QPushButton(QStringLiteral("+ Plate"));
-        auto* addBox = new QPushButton(QStringLiteral("+ Box"));
-        auto* addCylinder = new QPushButton(QStringLiteral("+ Cylinder"));
-        auto* drawCurve = new QPushButton(QStringLiteral("Draw Curve"));
-        setButtonIcon(addPlate, QStyle::SP_FileDialogNewFolder);
-        setButtonIcon(addBox, QStyle::SP_FileDialogNewFolder);
-        setButtonIcon(addCylinder, QStyle::SP_FileDialogNewFolder);
-        setButtonIcon(drawCurve, QStyle::SP_DialogOpenButton);
-        addRow->addWidget(addPlate);
-        addRow->addWidget(addBox);
-        addRow->addWidget(addCylinder);
-        addRow->addWidget(drawCurve);
+        auto* addPlate = new QPushButton(this);
+        auto* addBox = new QPushButton(this);
+        auto* addCylinder = new QPushButton(this);
+        auto* drawCurve = new QPushButton(this);
+        addPlate->hide();
+        addBox->hide();
+        addCylinder->hide();
+        drawCurve->hide();
         objectsList_ = new QTreeWidget;
         objectsList_->setHeaderHidden(true);
         objectsList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -406,8 +401,6 @@ public:
         auto* duplicateButton = new QPushButton(QStringLiteral("Duplicate selected"));
         setButtonIcon(removeButton, QStyle::SP_TrashIcon);
         setButtonIcon(duplicateButton, QStyle::SP_FileIcon);
-        leftLayout->addLayout(addRow);
-        leftLayout->addWidget(new QLabel(QStringLiteral("Navigation Tree")));
         leftLayout->addWidget(objectsList_, 1);
         leftLayout->addWidget(duplicateButton);
         leftLayout->addWidget(removeButton);
@@ -976,7 +969,7 @@ public:
         connect(antennaButton, &QPushButton::clicked, this, [this] {
             runAntennaSimulation();
         });
-        createRibbonAndMenus(addPlate, addBox, addCylinder, exportStepButton,
+        createRibbonAndMenus(addPlate, addBox, addCylinder, drawCurve, exportStepButton,
                              openResultsButton, drawPlateButton, drawBoxButton,
                              topViewButton, newProjectButton, openProjectButton,
                              saveProjectButton, duplicateButton, importStepButton,
@@ -1472,9 +1465,13 @@ public:
     }
 
     void startEmptyStartupSmokeTest() {
+        const bool emptyStartup = objects_.empty() && resultDirectory_.isEmpty() &&
+                                  !wr90Run_ && !antennaRun_ &&
+                                  !hasActiveProject_;
+        if (emptyStartup) newProject();
         smokeTestExitCode_ =
-            objects_.empty() && resultDirectory_.isEmpty() && !wr90Run_ &&
-                    !antennaRun_
+            emptyStartup && hasActiveProject_ && objects_.empty() &&
+                    windowTitle() == QStringLiteral("RF Simulation — Untitled Project")
                 ? 0
                 : 1;
         QApplication::quit();
@@ -1557,7 +1554,8 @@ private:
     }
 
     void createRibbonAndMenus(QPushButton* addPlate, QPushButton* addBox,
-                              QPushButton* addCylinder, QPushButton* exportStep,
+                              QPushButton* addCylinder, QPushButton* drawCurve,
+                              QPushButton* exportStep,
                               QPushButton* openResults, QPushButton* drawPlate,
                               QPushButton* drawBox, QPushButton* topView,
                               QPushButton* newProject, QPushButton* openProject,
@@ -1942,6 +1940,7 @@ private:
             {QStringLiteral("Add Plate"), [addPlate] { addPlate->click(); }},
             {QStringLiteral("Add Box"), [addBox] { addBox->click(); }},
             {QStringLiteral("Add Cylinder"), [addCylinder] { addCylinder->click(); }},
+            {QStringLiteral("Draw Curve"), [drawCurve] { drawCurve->click(); }},
             {QStringLiteral("Draw Plate"), [drawPlate] { drawPlate->click(); }},
             {QStringLiteral("Draw Box"), [drawBox] { drawBox->click(); }},
             {QStringLiteral("Top / 3D View"), [topView] { topView->click(); }},
@@ -2167,8 +2166,7 @@ private:
         navigationDock_ = new QDockWidget(QStringLiteral("Navigation Tree"), this);
         navigationDock_->setObjectName(QStringLiteral("navigationTreeDock"));
         navigationDock_->setAllowedAreas(Qt::LeftDockWidgetArea);
-        navigationDock_->setFeatures(QDockWidget::DockWidgetClosable |
-                                     QDockWidget::DockWidgetMovable);
+        navigationDock_->setFeatures(QDockWidget::DockWidgetMovable);
         navigationPanel_->setParent(nullptr);
         navigationDock_->setWidget(navigationPanel_);
         addDockWidget(Qt::LeftDockWidgetArea, navigationDock_);
@@ -2214,6 +2212,7 @@ private:
             "QPushButton, QToolButton { padding: 6px 9px; background: #f7f9fc; border: 1px solid #b8c5d4; border-radius: 3px; }"
             "QPushButton:hover, QToolButton:hover { background: #e7f1fa; border-color: #4a8cc2; }"
             "QDockWidget::title { background: #dce4ee; padding: 5px; }"));
+        setProjectCanvasAppearance(false);
     }
 
     bool loadWr90Results(const QString& directory) {
@@ -2497,14 +2496,26 @@ private:
     }
 
     void newProject() {
-        if (QMessageBox::question(
+        if ((hasActiveProject_ || !objects_.empty()) &&
+            QMessageBox::question(
                 this, QStringLiteral("New Project"),
                 QStringLiteral("Discard the current model and start a new project?"))
-            != QMessageBox::Yes) {
+                != QMessageBox::Yes) {
             return;
         }
         resetProjectState();
+        hasActiveProject_ = true;
+        setProjectCanvasAppearance(true);
         setWindowTitle(QStringLiteral("RF Simulation — Untitled Project"));
+    }
+
+    void setProjectCanvasAppearance(bool active) {
+        const QString background = active ? QStringLiteral("#ffffff")
+                                          : QStringLiteral("#e1e5e9");
+        objectsList_->setStyleSheet(
+            QStringLiteral("QTreeWidget { background: %1; border: 1px solid #c8d1dd; }")
+                .arg(background));
+        view_->setProjectActive(active);
     }
 
     void closeProject() {
@@ -2523,6 +2534,7 @@ private:
     void resetProjectState() {
         objects_.clear();
         projectPath_.clear();
+        hasActiveProject_ = false;
         resultDirectory_.clear();
         projectResultsTempDir_.reset();
         simulationResultsTempDir_.reset();
@@ -2579,6 +2591,7 @@ private:
         antennaLossTangent_->setValue(0.0);
         updateReferenceGeometry();
         view_->setWaveguideReference(false);
+        setProjectCanvasAppearance(false);
     }
 
     QStringList recentProjectPaths() const {
@@ -2640,6 +2653,8 @@ private:
             return;
         }
         projectPath_ = path;
+        hasActiveProject_ = true;
+        setProjectCanvasAppearance(true);
         setWindowTitle(QStringLiteral("RF Simulation — %1")
                            .arg(QFileInfo(path).completeBaseName()));
         statusBar()->showMessage(QStringLiteral("Project loaded: %1").arg(path));
@@ -2678,6 +2693,8 @@ private:
             return;
         }
         projectPath_ = path;
+        hasActiveProject_ = true;
+        setProjectCanvasAppearance(true);
         setWindowTitle(QStringLiteral("RF Simulation — %1")
                            .arg(QFileInfo(path).completeBaseName()));
         statusBar()->showMessage(QStringLiteral("Project saved: %1").arg(path));
@@ -3977,6 +3994,7 @@ private:
 
     std::vector<rfsim::SolidObject> objects_;
     QString projectPath_;
+    bool hasActiveProject_ = false;
     QString resultDirectory_;
     std::unique_ptr<QTemporaryDir> projectResultsTempDir_;
     std::unique_ptr<QTemporaryDir> simulationResultsTempDir_;

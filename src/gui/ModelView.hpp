@@ -19,6 +19,7 @@ public:
 
     void setObjects(const std::vector<rfsim::SolidObject>& objects);
     void setSelectedIndex(int index);
+    void setProjectActive(bool active);
     void setWaveguideReference(bool enabled);
     void setAntennaReference(bool enabled);
     void setWaveguideDimensions(double widthMm, double heightMm,
@@ -54,6 +55,7 @@ private:
     std::vector<rfsim::SolidObject> objects_;
     QPoint lastMousePosition_;
     int selectedIndex_ = -1;
+    bool projectActive_ = false;
     bool waveguideReference_ = false;
     bool antennaReference_ = false;
     bool topView_ = false;

@@ -33,6 +33,11 @@ void ModelView::setSelectedIndex(int index) {
     update();
 }
 
+void ModelView::setProjectActive(bool active) {
+    projectActive_ = active;
+    update();
+}
+
 void ModelView::setWaveguideReference(bool enabled) {
     waveguideReference_ = enabled;
     if (enabled) antennaReference_ = false;
@@ -224,7 +229,7 @@ void ModelView::paintEvent(QPaintEvent*) {
     projectedBounds_.clear();
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(247, 249, 252));
+    painter.fillRect(rect(), projectActive_ ? Qt::white : QColor(225, 229, 233));
 
     double minX = 0.0, minY = 0.0, minZ = 0.0;
     double maxX = 40.0, maxY = 20.0, maxZ = 1.6;
