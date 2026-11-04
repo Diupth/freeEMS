@@ -51,6 +51,7 @@
 #include <QProgressBar>
 #include <QProcess>
 #include <QProxyStyle>
+#include <QRegularExpression>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
@@ -177,6 +178,13 @@ public:
     }
 
     bool hasData() const { return !points_.empty(); }
+    bool hasSecondData() const { return !secondPoints_.empty(); }
+    void setLabels(QString title, QString xLabel, QString yLabel) {
+        title_ = std::move(title);
+        xLabel_ = std::move(xLabel);
+        yLabel_ = std::move(yLabel);
+        update();
+    }
 
 protected:
     void paintEvent(QPaintEvent*) override {
@@ -297,6 +305,8 @@ public:
         samples_.clear();
         update();
     }
+
+    bool hasData() const { return !samples_.empty(); }
 
 protected:
     void paintEvent(QPaintEvent*) override {
@@ -460,15 +470,32 @@ public:
         s11Plot_ = new PlotWidget(QStringLiteral("S11 (reflection coefficient)"),
                                   QStringLiteral("Frequency (GHz)"),
                                   QStringLiteral("S11 (dB)"));
+        sParametersPage_ = new QWidget;
+        auto* sParametersLayout = new QVBoxLayout(sParametersPage_);
+        auto* sParameterSelectorRow = new QHBoxLayout;
+        sParameterSelectorRow->addWidget(
+            new QLabel(QStringLiteral("Scattering parameter")));
+        sParameterSelector_ = new QComboBox;
+        sParameterSelectorRow->addWidget(sParameterSelector_, 1);
+        sParametersLayout->addLayout(sParameterSelectorRow);
+        sParametersLayout->addWidget(s11Plot_, 1);
         wavePlot_ = new PlotWidget(QStringLiteral("Port voltage waveform"),
                                    QStringLiteral("Time (ns)"),
                                    QStringLiteral("Voltage (V)"));
         resultPlots_ = new QTabWidget;
-        resultPlots_->addTab(s11Plot_, QStringLiteral("S-parameters"));
+        resultPlots_->addTab(sParametersPage_, QStringLiteral("S-parameters"));
         vswrPlot_ = new PlotWidget(QStringLiteral("Voltage standing-wave ratio"),
                                    QStringLiteral("Frequency (GHz)"),
                                    QStringLiteral("VSWR"));
-        resultPlots_->addTab(vswrPlot_, QStringLiteral("VSWR"));
+        vswrPage_ = new QWidget;
+        auto* vswrLayout = new QVBoxLayout(vswrPage_);
+        auto* vswrSelectorRow = new QHBoxLayout;
+        vswrSelectorRow->addWidget(new QLabel(QStringLiteral("VSWR series")));
+        vswrSelector_ = new QComboBox;
+        vswrSelectorRow->addWidget(vswrSelector_, 1);
+        vswrLayout->addLayout(vswrSelectorRow);
+        vswrLayout->addWidget(vswrPlot_, 1);
+        resultPlots_->addTab(vswrPage_, QStringLiteral("VSWR"));
         resultPlots_->addTab(wavePlot_, QStringLiteral("Waveform"));
         auto* right = new QWidget;
         auto* rightLayout = new QVBoxLayout(right);
@@ -555,36 +582,53 @@ public:
         boundary_ = new QComboBox;
         boundary_->addItem(QStringLiteral("MUR"), QStringLiteral("MUR"));
         boundary_->addItem(QStringLiteral("PML_8"), QStringLiteral("PML_8"));
-        portStartX_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
-        portStartY_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
-        portStartZ_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
-        portStopX_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
-        portStopY_ = makeNumberControl(-1000, 1000, 0, QStringLiteral(" mm"));
-        portStopZ_ = makeNumberControl(-1000, 1000, 1, QStringLiteral(" mm"));
-        portDirection_ = new QComboBox;
-        portDirection_->addItem(QStringLiteral("X"), QStringLiteral("x"));
-        portDirection_->addItem(QStringLiteral("Y"), QStringLiteral("y"));
-        portDirection_->addItem(QStringLiteral("Z"), QStringLiteral("z"));
-        portDirection_->setCurrentIndex(
-            portDirection_->findData(QStringLiteral("z")));
-        portImpedance_ = makeNumberControl(1, 10000, 50, QStringLiteral(" Ω"));
         simulationForm->addRow(QStringLiteral("Frequency start"), frequencyStart_);
         simulationForm->addRow(QStringLiteral("Frequency stop"), frequencyStop_);
         simulationForm->addRow(QStringLiteral("S11 samples"), frequencyPoints_);
         simulationForm->addRow(QStringLiteral("Mesh cells / wavelength"), meshDivisions_);
         simulationForm->addRow(QStringLiteral("Maximum time steps"), maxTimesteps_);
         simulationForm->addRow(QStringLiteral("Boundary condition"), boundary_);
-        simulationForm->addRow(QStringLiteral("Lumped port axis"), portDirection_);
-        simulationForm->addRow(QStringLiteral("Start X"), portStartX_);
-        simulationForm->addRow(QStringLiteral("Start Y"), portStartY_);
-        simulationForm->addRow(QStringLiteral("Start Z"), portStartZ_);
-        simulationForm->addRow(QStringLiteral("Stop X"), portStopX_);
-        simulationForm->addRow(QStringLiteral("Stop Y"), portStopY_);
-        simulationForm->addRow(QStringLiteral("Stop Z"), portStopZ_);
-        simulationForm->addRow(QStringLiteral("Port impedance"), portImpedance_);
         simulationLayout->addLayout(simulationForm);
+        portsTable_ = new QTableWidget(0, 10);
+        portsTable_->setHorizontalHeaderLabels({
+            QStringLiteral("Type"), QStringLiteral("Mode"),
+            QStringLiteral("Axis"), QStringLiteral("Start X (mm)"),
+            QStringLiteral("Start Y (mm)"), QStringLiteral("Start Z (mm)"),
+            QStringLiteral("Stop X (mm)"), QStringLiteral("Stop Y (mm)"),
+            QStringLiteral("Stop Z (mm)"), QStringLiteral("Impedance (Ω)")
+        });
+        portsTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+        portsTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+        portsTable_->setEditTriggers(
+            QAbstractItemView::DoubleClicked |
+            QAbstractItemView::EditKeyPressed |
+            QAbstractItemView::SelectedClicked);
+        portsTable_->horizontalHeader()->setSectionResizeMode(
+            QHeaderView::ResizeToContents);
+        portsTable_->verticalHeader()->setDefaultSectionSize(22);
+        simulationLayout->addWidget(new QLabel(QStringLiteral("Ports")));
+        simulationLayout->addWidget(portsTable_);
+        auto* portActions = new QHBoxLayout;
+        auto* addPortButton = new QPushButton(QStringLiteral("Add port"));
+        auto* removePortButton = new QPushButton(QStringLiteral("Remove port"));
+        portActions->addWidget(addPortButton);
+        portActions->addWidget(removePortButton);
+        portActions->addStretch();
+        simulationLayout->addLayout(portActions);
+        connect(addPortButton, &QPushButton::clicked, this,
+                [this] { addPortRow(); });
+        connect(removePortButton, &QPushButton::clicked, this, [this] {
+            const int row = portsTable_->currentRow();
+            if (row >= 0) {
+                portsTable_->removeRow(row);
+                updatePortRowLabels();
+                updatePortVisualization();
+            }
+        });
+        connect(portsTable_, &QTableWidget::itemChanged, this,
+                [this](QTableWidgetItem*) { updatePortVisualization(); });
         auto* simulationHelp = new QLabel(QStringLiteral(
-            "CAD workflow: draw/select geometry → assign material → set frequency, mesh and boundary → configure the lumped port → Run simulation."));
+            "Configure port type, mode, axis and start/stop coordinates explicitly. Port definitions are saved in the OEM project and used unchanged by the solver."));
         simulationHelp->setWordWrap(true);
         simulationLayout->addWidget(simulationHelp);
         auto* engineRow = new QHBoxLayout;
@@ -609,7 +653,8 @@ public:
         log_->setReadOnly(true);
         log_->setMaximumBlockCount(3000);
         progressBar_ = new QProgressBar;
-        progressBar_->setRange(0, 0);
+        progressBar_->setRange(0, 100);
+        progressBar_->setFormat(QStringLiteral("%p%"));
         progressBar_->hide();
         simulationLayout->addWidget(new QLabel(
             QStringLiteral("Detailed solver output is shown in Progress / Messages below.")));
@@ -753,24 +798,18 @@ public:
                 [this] { openProject(); });
         connect(saveProjectButton, &QPushButton::clicked, this,
                 [this] { saveProject(); });
-        for (auto* control : {portStartX_, portStartY_, portStartZ_,
-                              portStopX_, portStopY_, portStopZ_}) {
-            connect(control, &QDoubleSpinBox::valueChanged, this, [this] {
-                updatePortVisualization();
-                updateParameterList();
-            });
-        }
-        connect(portDirection_, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [this](int) {
-            updatePortVisualization();
-            updateParameterList();
-        });
         for (auto* control : {frequencyStart_, frequencyStop_, frequencyPoints_,
-                              meshDivisions_, maxTimesteps_, portImpedance_}) {
+                              meshDivisions_, maxTimesteps_}) {
             connect(control, &QDoubleSpinBox::valueChanged, this, [this] {
                 updateParameterList();
             });
         }
+        connect(sParameterSelector_,
+                qOverload<int>(&QComboBox::currentIndexChanged),
+                this, [this](int) { updateSelectedSParameterGraph(); });
+        connect(vswrSelector_,
+                qOverload<int>(&QComboBox::currentIndexChanged),
+                this, [this](int) { updateSelectedVSWRGraph(); });
         connect(boundary_, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int) { updateParameterList(); });
         connect(exportStepButton, &QPushButton::clicked, this,
@@ -781,24 +820,25 @@ public:
             }
         });
         connect(solverProcess_, &QProcess::readyReadStandardOutput, this, [this] {
-            log_->appendPlainText(QString::fromUtf8(solverProcess_->readAllStandardOutput()));
+            appendSolverOutput(solverProcess_->readAllStandardOutput());
         });
         connect(solverProcess_, &QProcess::readyReadStandardError, this, [this] {
-            log_->appendPlainText(QString::fromUtf8(solverProcess_->readAllStandardError()));
+            appendSolverOutput(solverProcess_->readAllStandardError());
         });
         connect(solverProcess_,
                 qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
                 this, [this](int code, QProcess::ExitStatus exitStatus) {
+            appendSolverOutput(solverProcess_->readAllStandardOutput());
+            appendSolverOutput(solverProcess_->readAllStandardError());
             runButton_->setEnabled(true);
             cancelButton_->setEnabled(false);
             progressBar_->setRange(0, 100);
-            progressBar_->setValue(100);
-            QTimer::singleShot(1200, progressBar_, &QWidget::hide);
             if (cancelRequested_) {
                 cancelRequested_ = false;
                 status_->setText(QStringLiteral("Simulation cancelled."));
                 statusBar()->showMessage(QStringLiteral("Simulation cancelled"));
                 log_->appendPlainText(QStringLiteral("Simulation cancelled by user."));
+                QTimer::singleShot(1200, progressBar_, &QWidget::hide);
                 if (smokeTestMode_) {
                     smokeTestExitCode_ = smokeTestExpectedCancel_ ? 0 : 1;
                     QApplication::quit();
@@ -815,20 +855,97 @@ public:
                 QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.csv")) &&
                 QFileInfo::exists(resultDirectory_ + QStringLiteral("/s11_scene.s1p")) &&
                 QFileInfo::exists(resultDirectory_ + QStringLiteral("/waveform_scene.csv"));
+            const bool progressPanelReady =
+                analysisPanelAction_->isChecked() &&
+                analysisTabs_->currentWidget() == messagesPage_ &&
+                (!smokeTestMode_ || smokeTestSawSolverOutput_);
             if (exitStatus == QProcess::NormalExit && code == 0 &&
-                (!gpuRequested || gpuConfirmed) && resultsExist) {
+                (!gpuRequested || gpuConfirmed) && resultsExist &&
+                progressPanelReady) {
                 if (smokeTestExpectedCancel_) smokeTestExitCode_ = 1;
+                resultKind_ = QStringLiteral("cad");
+                progressBar_->setValue(100);
+                QTimer::singleShot(1200, progressBar_, &QWidget::hide);
                 status_->setText(QStringLiteral("Simulation completed; results loaded below."));
-                s11Plot_->loadCsv(resultDirectory_ + QStringLiteral("/s11_scene.csv"),
-                                  0, 3, 1e-9, 1.0);
-                vswrPlot_->clear();
+                QString graphError;
+                const bool sParametersLoaded = loadSParameterGraphs(
+                    {resultDirectory_ + QStringLiteral("/s11_scene.csv")},
+                    &graphError);
+                if (!sParametersLoaded) {
+                    smokeTestExitCode_ = 1;
+                    log_->appendPlainText(graphError);
+                    status_->setText(
+                        QStringLiteral("Simulation completed but S-parameter results could not be loaded."));
+                }
+                QString vswrError;
+                if (!loadVSWRGraphs(
+                        {resultDirectory_ + QStringLiteral("/s11_scene.csv")},
+                        &vswrError)) {
+                    smokeTestExitCode_ = 1;
+                    log_->appendPlainText(vswrError);
+                }
+                QString additionalResultError;
+                if (!loadAdditionalResultPlots(resultDirectory_,
+                                               &additionalResultError)) {
+                    smokeTestExitCode_ = 1;
+                    log_->appendPlainText(additionalResultError);
+                }
                 wavePlot_->loadCsv(resultDirectory_ + QStringLiteral("/waveform_scene.csv"),
                                    0, 1, 1e9, 1.0, 2);
                 statusBar()->showMessage(QStringLiteral("Simulation complete — results loaded"));
                 refreshList(currentObjectIndex());
+                resultPlots_->setCurrentWidget(sParametersPage_);
                 workspace_->setCurrentWidget(resultsPage_);
+                if (smokeTestMode_) {
+                    const QString savedProjectPath = QDir(resultDirectory_).filePath(
+                        QStringLiteral("simulation-result-roundtrip.oem"));
+                    QFile generatedS11(resultDirectory_ +
+                                        QStringLiteral("/s11_scene.csv"));
+                    const QByteArray expectedS11 =
+                        generatedS11.open(QIODevice::ReadOnly)
+                            ? generatedS11.readAll()
+                            : QByteArray();
+                    QString saveError;
+                    const bool saved = !expectedS11.isEmpty() &&
+                        saveProjectFile(savedProjectPath, &saveError);
+                    const bool reloaded =
+                        saved && loadProjectFile(savedProjectPath, &saveError);
+                    const bool duplicateSceneCsvTab = std::any_of(
+                        additionalResultPages_.cbegin(),
+                        additionalResultPages_.cend(),
+                        [this](QWidget* page) {
+                            return resultPlots_->tabText(
+                                       resultPlots_->indexOf(page)) ==
+                                   QStringLiteral("s11_scene");
+                        });
+                    const bool resultsPersisted =
+                        smokeTestClearedLoadedResults_ && reloaded &&
+                        !duplicateSceneCsvTab &&
+                        resultKind_ == QStringLiteral("cad") &&
+                        projectResultFiles_.value(
+                            QStringLiteral("s11_scene.csv")) == expectedS11 &&
+                        projectResultFiles_.contains(
+                            QStringLiteral("waveform_scene.csv")) &&
+                        projectResultFiles_.contains(
+                            QStringLiteral("s_parameters_scene.s3p")) &&
+                        projectSimulationSettings_.ports.size() == 3 &&
+                        s11Plot_->hasData() && sParameterSelector_->count() >= 9 &&
+                        vswrPlot_->hasData() && vswrSelector_->count() >= 3 &&
+                        wavePlot_->hasData();
+                    if (!resultsPersisted) {
+                        smokeTestExitCode_ = 1;
+                        log_->appendPlainText(
+                            !smokeTestClearedLoadedResults_
+                                ? QStringLiteral("Previous project results were not cleared when the new simulation started.")
+                                : QStringLiteral("Simulation result save/reload failed: %1")
+                                      .arg(saveError.isEmpty()
+                                               ? QStringLiteral("saved results did not round-trip")
+                                               : saveError));
+                    }
+                }
             } else {
                 smokeTestExitCode_ = 1;
+                QTimer::singleShot(1200, progressBar_, &QWidget::hide);
                 status_->setText(QStringLiteral(
                     "Simulation failed, results are missing, or the requested GPU engine was not confirmed."));
                 log_->appendPlainText(QStringLiteral("Process exit code: %1").arg(code));
@@ -1031,20 +1148,30 @@ public:
     void startSimulationForSmokeTest() {
         smokeTestMode_ = true;
         ensureSmokeGeometry();
+        rfsim::OemPort port;
+        port.axis = QStringLiteral("x");
+        port.startXmm = -20.0;
+        port.startYmm = 10.0;
+        port.startZmm = 10.0;
+        port.stopXmm = -15.0;
+        port.stopYmm = 10.0;
+        port.stopZmm = 10.0;
+        loadPorts({port});
         runSimulation(QString::fromUtf8(RF_SIM_SMOKE_OUTPUT));
     }
 
     void startXAxisPortSmokeTest() {
         smokeTestMode_ = true;
         ensureSmokeGeometry();
-        portDirection_->setCurrentIndex(
-            portDirection_->findData(QStringLiteral("x")));
-        portStartX_->setValue(-20.0);
-        portStartY_->setValue(10.0);
-        portStartZ_->setValue(10.0);
-        portStopX_->setValue(-15.0);
-        portStopY_->setValue(10.0);
-        portStopZ_->setValue(10.0);
+        rfsim::OemPort port;
+        port.axis = QStringLiteral("x");
+        port.startXmm = -20.0;
+        port.startYmm = 10.0;
+        port.startZmm = 10.0;
+        port.stopXmm = -15.0;
+        port.stopYmm = 10.0;
+        port.stopZmm = 10.0;
+        loadPorts({port});
         runSimulation(QString::fromUtf8(RF_SIM_AXIS_PORT_SMOKE_OUTPUT));
     }
 
@@ -1266,6 +1393,24 @@ public:
         const QString editedMaterialName =
             geometryMaterials_.front().name + QStringLiteral(" edited");
         projectMaterialsList_->item(0, 0)->setText(editedMaterialName);
+        rfsim::OemPort testPort1;
+        testPort1.startZmm = 0.0;
+        testPort1.stopZmm = 1.0;
+        rfsim::OemPort testPort2;
+        testPort2.startXmm = 12.0;
+        testPort2.startZmm = 0.0;
+        testPort2.stopXmm = 12.0;
+        testPort2.stopZmm = 2.0;
+        testPort2.impedanceOhm = 75.0;
+        rfsim::OemPort testPort3;
+        testPort3.axis = QStringLiteral("x");
+        testPort3.startXmm = -5.0;
+        testPort3.startYmm = 10.0;
+        testPort3.startZmm = 20.0;
+        testPort3.stopXmm = 5.0;
+        testPort3.stopYmm = 10.0;
+        testPort3.stopZmm = 20.0;
+        loadPorts({testPort1, testPort2, testPort3});
         const auto originalObjects = objects_;
         const double originalFrequency = frequencyStart_->value();
         const bool saved = saveProjectFile(projectPath_, &error);
@@ -1279,6 +1424,22 @@ public:
             !QFileInfo::exists(resultDirectory_ + QStringLiteral("/raw_field.h5")) &&
             solverFiles_.contains(QStringLiteral("openems.xml")) &&
             solverFiles_.contains(QStringLiteral("geometry/solid_0.stl"));
+        const bool portsRestored =
+            projectSimulationSettings_.ports.size() == 3 &&
+            projectSimulationSettings_.ports[1].type ==
+                QStringLiteral("lumped") &&
+            projectSimulationSettings_.ports[1].axis ==
+                QStringLiteral("z") &&
+            projectSimulationSettings_.ports[1].startXmm == 12.0 &&
+            projectSimulationSettings_.ports[1].stopZmm == 2.0 &&
+            projectSimulationSettings_.ports[1].impedanceOhm == 75.0 &&
+            projectSimulationSettings_.ports[2].axis ==
+                QStringLiteral("x") &&
+            projectSimulationSettings_.ports[2].startXmm == -5.0 &&
+            portsTable_->rowCount() == 3 &&
+            portsTable_->item(1, 3)->text() == QStringLiteral("12") &&
+            portsTable_->item(1, 8)->text() == QStringLiteral("2") &&
+            portsTable_->item(2, 0)->text() == QStringLiteral("lumped");
         bool roundTripOkay =
             loaded && objects_.size() == originalObjects.size() &&
             frequencyStart_->value() == originalFrequency &&
@@ -1299,7 +1460,7 @@ public:
             objects_.back().kind == rfsim::SolidKind::Imported &&
             !objects_.back().customShape.IsNull() &&
             std::abs(objects_.back().rotationZDegrees - 15.0) < 1e-9 &&
-            resultRestored &&
+            resultRestored && portsRestored &&
             std::any_of(geometryHistory_.begin(), geometryHistory_.end(),
                         [](const rfsim::OemFeature& feature) {
                             return feature.type ==
@@ -1374,13 +1535,32 @@ public:
             parameterTable_->item(0, 0) &&
             parameterTable_->item(0, 0)->text() ==
                 geometryParameters_.front().name;
+        const bool allProjectPortsShown =
+            view_->portCount() == projectSimulationSettings_.ports.size();
         const bool resultGraphsVisible =
-            s11Plot_->hasData() || vswrPlot_->hasData() || wavePlot_->hasData();
+            s11Plot_->hasData() || vswrPlot_->hasData() || wavePlot_->hasData() ||
+            !additionalResultPages_.empty();
+        const QStringList resultNames = projectResultFiles_.keys();
+        const auto csvResultCount = std::count_if(
+            resultNames.cbegin(), resultNames.cend(),
+            [](const QString& name) {
+                return name.endsWith(QStringLiteral(".csv"),
+                                     Qt::CaseInsensitive);
+            });
+        const size_t fixedGraphCount =
+            static_cast<size_t>(s11Plot_->hasData()) +
+            static_cast<size_t>(vswrPlot_->hasData()) +
+            static_cast<size_t>(wavePlot_->hasData());
+        const bool csvResultsHavePlots =
+            additionalResultPages_.size() + fixedGraphCount >=
+            static_cast<size_t>(csvResultCount);
         smokeTestExitCode_ =
             loaded && !solverFiles_.isEmpty() &&
                     projectSectionsPopulated &&
                     projectParametersPopulated &&
+                    allProjectPortsShown &&
                     resultGraphsVisible &&
+                    csvResultsHavePlots &&
                     workspace_->currentWidget() == workspace_->widget(0) &&
                     solverSelectionButton_ &&
                     solverSelectionButton_->text() == QStringLiteral("openEMS") &&
@@ -1421,13 +1601,47 @@ public:
             QApplication::quit();
             return;
         }
+        if (projectSimulationSettings_.ports.size() < 2) {
+            smokeTestExitCode_ = 1;
+            log_->appendPlainText(
+                QStringLiteral("Waveguide project is missing its second configured port."));
+            QApplication::quit();
+            return;
+        }
+        rfsim::OemPort thirdPort;
+        thirdPort.type = QStringLiteral("rect-waveguide");
+        thirdPort.mode = projectSimulationSettings_.ports.front().mode;
+        thirdPort.axis = QStringLiteral("z");
+        thirdPort.startZmm = 45.0;
+        thirdPort.stopXmm =
+            projectSimulationSettings_.ports.front().stopXmm;
+        thirdPort.stopYmm =
+            projectSimulationSettings_.ports.front().stopYmm;
+        thirdPort.stopZmm = 50.0;
+        addPortRow(&thirdPort);
+        const bool hadLoadedResults =
+            !projectResultFiles_.isEmpty() &&
+            (s11Plot_->hasData() || vswrPlot_->hasData() || wavePlot_->hasData());
         runSimulation(output);
+        smokeTestClearedLoadedResults_ =
+            hadLoadedResults && resultKind_ == QStringLiteral("none") &&
+            projectResultFiles_.isEmpty() && !s11Plot_->hasData() &&
+            !vswrPlot_->hasData() && !wavePlot_->hasData();
     }
 
     void startCancelSmokeTest() {
         smokeTestMode_ = true;
         smokeTestExpectedCancel_ = true;
         ensureSmokeGeometry();
+        rfsim::OemPort port;
+        port.axis = QStringLiteral("x");
+        port.startXmm = -20.0;
+        port.startYmm = 10.0;
+        port.startZmm = 10.0;
+        port.stopXmm = -15.0;
+        port.stopYmm = 10.0;
+        port.stopZmm = 10.0;
+        loadPorts({port});
         maxTimesteps_->setValue(10000000);
         runSimulation(QString::fromUtf8(RF_SIM_SMOKE_OUTPUT));
         QTimer::singleShot(150, this, [this] {
@@ -2117,11 +2331,11 @@ private:
         makeRibbonPage(QStringLiteral("Results"), {
             {QStringLiteral("S-Params"), [this] {
                 workspace_->setCurrentWidget(resultsPage_);
-                resultPlots_->setCurrentWidget(s11Plot_);
+                resultPlots_->setCurrentWidget(sParametersPage_);
             }},
             {QStringLiteral("VSWR"), [this] {
                 workspace_->setCurrentWidget(resultsPage_);
-                resultPlots_->setCurrentWidget(vswrPlot_);
+                resultPlots_->setCurrentWidget(vswrPage_);
             }},
             {QStringLiteral("Waveform"), [this] {
                 workspace_->setCurrentWidget(resultsPage_);
@@ -2261,19 +2475,19 @@ private:
         auto* analysisLayout = new QVBoxLayout(analysisPanel_);
         analysisLayout->setContentsMargins(0, 0, 0, 0);
         analysisLayout->setSpacing(0);
-        auto* analysisTabs = new QTabWidget;
-        analysisTabs->findChild<QTabBar*>()->setExpanding(false);
+        analysisTabs_ = new QTabWidget;
+        analysisTabs_->findChild<QTabBar*>()->setExpanding(false);
         auto* analysisTabStyle = new LeftAlignedTabStyle;
-        analysisTabStyle->setParent(analysisTabs);
-        analysisTabs->setStyle(analysisTabStyle);
-        analysisTabs->addTab(parameterTable_, QStringLiteral("Parameter List"));
-        auto* messages = new QWidget;
-        auto* messagesLayout = new QVBoxLayout(messages);
+        analysisTabStyle->setParent(analysisTabs_);
+        analysisTabs_->setStyle(analysisTabStyle);
+        analysisTabs_->addTab(parameterTable_, QStringLiteral("Parameter List"));
+        messagesPage_ = new QWidget;
+        auto* messagesLayout = new QVBoxLayout(messagesPage_);
         messagesLayout->setContentsMargins(4, 4, 4, 4);
         messagesLayout->addWidget(progressBar_);
         messagesLayout->addWidget(log_, 1);
-        analysisTabs->addTab(messages, QStringLiteral("Progress / Messages"));
-        analysisLayout->addWidget(analysisTabs, 1);
+        analysisTabs_->addTab(messagesPage_, QStringLiteral("Progress / Messages"));
+        analysisLayout->addWidget(analysisTabs_, 1);
         analysisPanel_->setStyleSheet(QStringLiteral(
             "QWidget { font-size: 9pt; }"
             "QTabBar::tab { padding: 4px 8px; }"
@@ -2443,9 +2657,135 @@ private:
     }
 
     void updatePortVisualization() {
-        view_->setLumpedPort(portStartX_->value(), portStartY_->value(),
-                             portStartZ_->value(), portStopX_->value(),
-                             portStopY_->value(), portStopZ_->value());
+        view_->setPorts(readPorts(nullptr));
+    }
+
+    void addPortRow(const rfsim::OemPort* port = nullptr) {
+        const int row = portsTable_->rowCount();
+        portsTable_->insertRow(row);
+        const QStringList values = port
+            ? QStringList{
+                  port->type, port->mode, port->axis,
+                  QString::number(port->startXmm, 'g', 12),
+                  QString::number(port->startYmm, 'g', 12),
+                  QString::number(port->startZmm, 'g', 12),
+                  QString::number(port->stopXmm, 'g', 12),
+                  QString::number(port->stopYmm, 'g', 12),
+                  QString::number(port->stopZmm, 'g', 12),
+                  QString::number(port->impedanceOhm, 'g', 12)}
+            : QStringList{QStringLiteral("lumped"), QString(), QStringLiteral("z"),
+                          QString(), QString(), QString(), QString(), QString(),
+                          QString(), QStringLiteral("50")};
+        for (int column = 0; column < values.size(); ++column) {
+            portsTable_->setItem(row, column,
+                                 new QTableWidgetItem(values[column]));
+        }
+        updatePortRowLabels();
+        updatePortVisualization();
+    }
+
+    void updatePortRowLabels() {
+        for (int row = 0; row < portsTable_->rowCount(); ++row) {
+            auto* header = portsTable_->verticalHeaderItem(row);
+            if (!header) {
+                header = new QTableWidgetItem;
+                portsTable_->setVerticalHeaderItem(row, header);
+            }
+            header->setText(QStringLiteral("Port %1").arg(row + 1));
+        }
+    }
+
+    void loadPorts(const std::vector<rfsim::OemPort>& ports) {
+        portsTable_->setRowCount(0);
+        for (const auto& port : ports) addPortRow(&port);
+        updatePortVisualization();
+    }
+
+    std::vector<rfsim::OemPort> readPorts(QString* error) const {
+        if (error) error->clear();
+        if (portsTable_->rowCount() > 128) {
+            if (error) *error = QStringLiteral("A project can contain at most 128 ports.");
+            return {};
+        }
+        std::vector<rfsim::OemPort> ports;
+        ports.reserve(static_cast<size_t>(portsTable_->rowCount()));
+        for (int row = 0; row < portsTable_->rowCount(); ++row) {
+            QString values[10];
+            for (int column = 0; column < 10; ++column) {
+                const auto* item = portsTable_->item(row, column);
+                values[column] = item ? item->text().trimmed() : QString();
+            }
+            rfsim::OemPort port;
+            port.type = values[0];
+            port.mode = values[1];
+            port.axis = values[2];
+            double* coordinates[] = {
+                &port.startXmm, &port.startYmm, &port.startZmm,
+                &port.stopXmm, &port.stopYmm, &port.stopZmm,
+                &port.impedanceOhm
+            };
+            for (int index = 0; index < 7; ++index) {
+                bool ok = false;
+                *coordinates[index] = values[index + 3].toDouble(&ok);
+                if (!ok || !std::isfinite(*coordinates[index])) {
+                    if (error) {
+                        *error = QStringLiteral(
+                            "Port %1 has a missing or invalid numeric value.")
+                                     .arg(row + 1);
+                    }
+                    return {};
+                }
+            }
+            const int axisIndex = QStringLiteral("xyz").indexOf(port.axis);
+            if (axisIndex < 0 ||
+                (port.type != QStringLiteral("lumped") &&
+                 port.type != QStringLiteral("rect-waveguide")) ||
+                port.impedanceOhm < 1 || port.impedanceOhm > 10000) {
+                if (error) {
+                    *error = QStringLiteral("Port %1 has an invalid type, axis or impedance.")
+                                 .arg(row + 1);
+                }
+                return {};
+            }
+            const double start[3] = {
+                port.startXmm, port.startYmm, port.startZmm
+            };
+            const double stop[3] = {
+                port.stopXmm, port.stopYmm, port.stopZmm
+            };
+            for (int axis = 0; axis < 3; ++axis) {
+                const bool validSpan = axis == axisIndex
+                    ? (port.type == QStringLiteral("lumped")
+                           ? start[axis] < stop[axis]
+                           : start[axis] != stop[axis])
+                    : (port.type == QStringLiteral("lumped")
+                           ? start[axis] == stop[axis]
+                           : start[axis] < stop[axis]);
+                if (!validSpan || std::abs(start[axis]) > 1000 ||
+                    std::abs(stop[axis]) > 1000) {
+                    if (error) {
+                        *error = QStringLiteral(
+                            "Port %1 has invalid start/stop coordinates.")
+                                     .arg(row + 1);
+                    }
+                    return {};
+                }
+            }
+            if (port.type == QStringLiteral("rect-waveguide") &&
+                port.mode != QStringLiteral("TE10") &&
+                port.mode != QStringLiteral("TE20") &&
+                port.mode != QStringLiteral("TE01") &&
+                port.mode != QStringLiteral("TE11")) {
+                if (error) {
+                    *error = QStringLiteral(
+                        "Port %1 requires a supported rectangular-waveguide mode.")
+                                 .arg(row + 1);
+                }
+                return {};
+            }
+            ports.push_back(std::move(port));
+        }
+        return ports;
     }
 
     QString createTemporaryResultsDirectory(QString* error) {
@@ -2462,22 +2802,67 @@ private:
         return path;
     }
 
-    bool validPortCoordinates() const {
-        const QString axis = portDirection_->currentData().toString();
-        if (axis == QStringLiteral("x")) {
-            return portStartX_->value() < portStopX_->value() &&
-                   portStartY_->value() == portStopY_->value() &&
-                   portStartZ_->value() == portStopZ_->value();
+    void appendSolverOutput(const QByteArray& output) {
+        if (output.isEmpty()) return;
+        if (smokeTestMode_) smokeTestSawSolverOutput_ = true;
+
+        const QString text = QString::fromUtf8(output);
+        log_->appendPlainText(text);
+        solverProgressBuffer_ += text;
+        static const QRegularExpression timestepPattern(
+            QStringLiteral("Timestep:\\s*(\\d+)"));
+        static const QRegularExpression excitationPattern(
+            QStringLiteral("S-parameter excitation\\s+(\\d+)/(\\d+)"));
+        while (true) {
+            const qsizetype lineEnd =
+                solverProgressBuffer_.indexOf(QLatin1Char('\n'));
+            if (lineEnd < 0) break;
+            const QString line = solverProgressBuffer_.left(lineEnd);
+            solverProgressBuffer_.remove(0, lineEnd + 1);
+            const auto excitationMatch = excitationPattern.match(line);
+            if (excitationMatch.hasMatch()) {
+                bool indexValid = false;
+                bool countValid = false;
+                const int index =
+                    excitationMatch.captured(1).toInt(&indexValid);
+                const int count =
+                    excitationMatch.captured(2).toInt(&countValid);
+                if (indexValid && countValid && count > 0) {
+                    solverExcitationIndex_ = std::clamp(index, 1, count);
+                    solverExcitationCount_ = count;
+                    const int sweepStart =
+                        5 + (solverExcitationIndex_ - 1) * 90 / count;
+                    progressBar_->setValue(sweepStart);
+                }
+            }
+            const auto match = timestepPattern.match(line);
+            if (!match.hasMatch()) continue;
+
+            bool valid = false;
+            const qlonglong timestep = match.captured(1).toLongLong(&valid);
+            if (!valid) continue;
+            const qlonglong maxTimesteps = std::max<qlonglong>(
+                1, static_cast<qlonglong>(maxTimesteps_->value()));
+            const qlonglong solverPercent = std::clamp<qlonglong>(
+                timestep * 90 / maxTimesteps, 0, 90);
+            const qlonglong completedSweepPercent =
+                (static_cast<qlonglong>(solverExcitationIndex_ - 1) * 90 +
+                 solverPercent) /
+                std::max(1, solverExcitationCount_);
+            progressBar_->setValue(
+                5 + static_cast<int>(completedSweepPercent));
         }
-        if (axis == QStringLiteral("y")) {
-            return portStartY_->value() < portStopY_->value() &&
-                   portStartX_->value() == portStopX_->value() &&
-                   portStartZ_->value() == portStopZ_->value();
+    }
+
+    bool validPortCoordinates(QString* error = nullptr) const {
+        const auto ports = readPorts(error);
+        if (ports.empty()) {
+            if (error && error->isEmpty()) {
+                *error = QStringLiteral("Add at least one port before running.");
+            }
+            return false;
         }
-        return axis == QStringLiteral("z") &&
-               portStartZ_->value() < portStopZ_->value() &&
-               portStartX_->value() == portStopX_->value() &&
-               portStartY_->value() == portStopY_->value();
+        return true;
     }
 
     void updateParameterList() {
@@ -2608,10 +2993,285 @@ private:
         statusBar()->showMessage(QStringLiteral("Project parameter updated."));
     }
 
+    bool loadSParameterGraphs(const QStringList& paths, QString* error) {
+        static const QRegularExpression sParameterColumn(
+            QStringLiteral("^s[0-9]+[0-9]+_db$"),
+            QRegularExpression::CaseInsensitiveOption);
+        {
+            const QSignalBlocker blocker(sParameterSelector_);
+            sParameterSelector_->clear();
+            for (const QString& path : paths) {
+                QFile file(path);
+                if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    if (error) {
+                        *error = QStringLiteral(
+                            "Cannot read S-parameter results %1: %2")
+                                     .arg(path, file.errorString());
+                    }
+                    return false;
+                }
+                const QStringList headers =
+                    QString::fromUtf8(file.readLine()).trimmed().split(',');
+                for (int column = 1; column < headers.size(); ++column) {
+                    const QString header = headers[column].trimmed();
+                    if (!sParameterColumn.match(header).hasMatch()) continue;
+                    const QString label =
+                        QStringLiteral("%1 — %2")
+                            .arg(QFileInfo(path).completeBaseName(),
+                                 header.left(header.size() - 3).toUpper());
+                    sParameterSelector_->addItem(label, path);
+                    sParameterSelector_->setItemData(
+                        sParameterSelector_->count() - 1, column,
+                        Qt::UserRole + 1);
+                }
+            }
+        }
+        if (sParameterSelector_->count() == 0) {
+            sParameterCsvPath_.clear();
+            s11Plot_->clear();
+            return true;
+        }
+        int selectedIndex = 0;
+        for (int index = 0; index < sParameterSelector_->count(); ++index) {
+            if (sParameterSelector_->itemText(index).endsWith(
+                    QStringLiteral("— S11"))) {
+                selectedIndex = index;
+                if (QFileInfo(sParameterSelector_->itemData(index).toString())
+                        .fileName() == QStringLiteral("s11_scene.csv")) {
+                    break;
+                }
+            }
+        }
+        sParameterSelector_->setCurrentIndex(selectedIndex);
+        updateSelectedSParameterGraph();
+        return s11Plot_->hasData();
+    }
+
+    bool loadVSWRGraphs(const QStringList& paths, QString* error) {
+        {
+            const QSignalBlocker blocker(vswrSelector_);
+            vswrSelector_->clear();
+            for (const QString& path : paths) {
+                QFile file(path);
+                if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    if (error) {
+                        *error = QStringLiteral("Cannot read VSWR results %1: %2")
+                                     .arg(path, file.errorString());
+                    }
+                    return false;
+                }
+                const QStringList headers =
+                    QString::fromUtf8(file.readLine()).trimmed().split(',');
+                for (int column = 1; column < headers.size(); ++column) {
+                    const QString header = headers[column].trimmed();
+                    if (!header.contains(QStringLiteral("vswr"),
+                                         Qt::CaseInsensitive)) {
+                        continue;
+                    }
+                    vswrSelector_->addItem(
+                        QStringLiteral("%1 — %2")
+                            .arg(QFileInfo(path).completeBaseName(), header),
+                        path);
+                    vswrSelector_->setItemData(
+                        vswrSelector_->count() - 1, column,
+                        Qt::UserRole + 1);
+                }
+            }
+        }
+        if (vswrSelector_->count() == 0) {
+            vswrCsvPath_.clear();
+            vswrPlot_->clear();
+            return true;
+        }
+        int selectedIndex = 0;
+        for (int index = 0; index < vswrSelector_->count(); ++index) {
+            if (vswrSelector_->itemText(index).contains(
+                    QStringLiteral("vswr_port_1"),
+                    Qt::CaseInsensitive)) {
+                selectedIndex = index;
+                break;
+            }
+        }
+        vswrSelector_->setCurrentIndex(selectedIndex);
+        updateSelectedVSWRGraph();
+        return vswrPlot_->hasData();
+    }
+
+    void updateSelectedSParameterGraph() {
+        if (!s11Plot_ || !sParameterSelector_ ||
+            sParameterSelector_->currentIndex() < 0) {
+            return;
+        }
+        const QString label = sParameterSelector_->currentText().section(
+            QStringLiteral(" — "), -1);
+        sParameterCsvPath_ = sParameterSelector_->currentData().toString();
+        const int column =
+            sParameterSelector_->currentData(Qt::UserRole + 1).toInt();
+        s11Plot_->setLabels(label + QStringLiteral(" (scattering parameter)"),
+                            QStringLiteral("Frequency (GHz)"),
+                            label + QStringLiteral(" (dB)"));
+        s11Plot_->loadCsv(sParameterCsvPath_, 0, column, 1e-9, 1.0, -1,
+                          label, QString());
+    }
+
+    void updateSelectedVSWRGraph() {
+        if (!vswrPlot_ || !vswrSelector_ ||
+            vswrSelector_->currentIndex() < 0) {
+            return;
+        }
+        vswrCsvPath_ = vswrSelector_->currentData().toString();
+        const int column = vswrSelector_->currentData(Qt::UserRole + 1).toInt();
+        const QString label = vswrSelector_->currentText().section(
+            QStringLiteral(" — "), -1);
+        vswrPlot_->setLabels(QStringLiteral("Voltage standing-wave ratio"),
+                             QStringLiteral("Frequency (GHz)"), label);
+        vswrPlot_->loadCsv(vswrCsvPath_, 0, column, 1e-9, 1.0, -1,
+                           label, QString());
+    }
+
+    void clearAdditionalResultPlots() {
+        for (QWidget* page : additionalResultPages_) {
+            const int index = resultPlots_->indexOf(page);
+            if (index >= 0) resultPlots_->removeTab(index);
+            page->deleteLater();
+        }
+        additionalResultPages_.clear();
+    }
+
+    bool loadAdditionalResultPlots(const QString& directory, QString* error) {
+        clearAdditionalResultPlots();
+        QStringList resultNames = projectResultFiles_.keys();
+        if (resultNames.isEmpty()) {
+            resultNames = QDir(directory).entryList(
+                {QStringLiteral("*.csv")},
+                QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+        }
+        for (const QString& name : resultNames) {
+            if (!name.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)) {
+                continue;
+            }
+            const QString path = QDir(directory).filePath(name);
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                if (error) {
+                    *error = QStringLiteral("Cannot read result plot %1: %2")
+                                 .arg(name, file.errorString());
+                }
+                return false;
+            }
+            const QStringList headers =
+                QString::fromUtf8(file.readLine()).trimmed().split(',');
+            if (headers.size() < 2) continue;
+
+            const QString firstHeader = headers.front().trimmed().toLower();
+            static const QRegularExpression sParameterColumn(
+                QStringLiteral("^s[0-9]+[0-9]+_(db|real|imag)$"),
+                QRegularExpression::CaseInsensitiveOption);
+            bool hasScatteringOrVswr = false;
+            bool allValuesHandledByDedicatedCharts = true;
+            bool hasVoltageColumn = false;
+            for (int column = 1; column < headers.size(); ++column) {
+                const QString valueHeader =
+                    headers[column].trimmed().toLower();
+                const bool sParameter =
+                    sParameterColumn.match(valueHeader).hasMatch();
+                const bool vswr =
+                    valueHeader.startsWith(QStringLiteral("vswr"));
+                const bool voltage =
+                    valueHeader.contains(QStringLiteral("voltage"));
+                hasScatteringOrVswr |= sParameter || vswr;
+                hasVoltageColumn |= voltage;
+                allValuesHandledByDedicatedCharts &=
+                    sParameter || vswr || voltage;
+            }
+            const bool standardWaveform =
+                firstHeader.contains(QStringLiteral("time")) &&
+                hasVoltageColumn;
+            if (allValuesHandledByDedicatedCharts &&
+                (hasScatteringOrVswr || standardWaveform)) {
+                continue;
+            }
+
+            const double xScale = firstHeader.contains(QStringLiteral("frequency"))
+                ? 1e-9
+                : firstHeader.contains(QStringLiteral("time")) ? 1e9 : 1.0;
+            const QString xLabel = firstHeader.contains(QStringLiteral("frequency"))
+                ? QStringLiteral("Frequency (GHz)")
+                : firstHeader.contains(QStringLiteral("time"))
+                    ? QStringLiteral("Time (ns)")
+                    : headers.front().trimmed();
+
+            const bool xYFieldMap =
+                firstHeader.contains(QStringLiteral("x_mm")) &&
+                headers.size() >= 3 &&
+                headers[1].trimmed().toLower().contains(QStringLiteral("y_mm"));
+            if (xYFieldMap) {
+                for (int column = 2; column < headers.size(); ++column) {
+                    auto* map = new FieldMapWidget(
+                        QStringLiteral("%1 — %2").arg(name, headers[column].trimmed()),
+                        headers[column].trimmed(), resultPlots_);
+                    map->loadCsv(path, 0, 1, column);
+                    if (!map->hasData()) {
+                        delete map;
+                        continue;
+                    }
+                    resultPlots_->addTab(
+                        map, QStringLiteral("%1: %2")
+                                 .arg(QFileInfo(name).completeBaseName(),
+                                      headers[column].trimmed()));
+                    additionalResultPages_.push_back(map);
+                }
+                continue;
+            }
+
+            auto* page = new QWidget(resultPlots_);
+            auto* layout = new QVBoxLayout(page);
+            auto* selectorRow = new QHBoxLayout;
+            selectorRow->addWidget(new QLabel(QStringLiteral("Value column")));
+            auto* selector = new QComboBox(page);
+            for (int column = 1; column < headers.size(); ++column) {
+                selector->addItem(headers[column].trimmed(), column);
+            }
+            selectorRow->addWidget(selector, 1);
+            layout->addLayout(selectorRow);
+            auto* plot = new PlotWidget(
+                name, xLabel, QStringLiteral("Value"), page);
+            layout->addWidget(plot, 1);
+            const auto updatePlot = [selector, plot, path, name, xScale, xLabel] {
+                const QString label = selector->currentText();
+                plot->setLabels(name, xLabel, label);
+                plot->loadCsv(path, 0, selector->currentData().toInt(),
+                              xScale, 1.0, -1, label, QString());
+            };
+            connect(selector, qOverload<int>(&QComboBox::currentIndexChanged),
+                    this, [updatePlot](int) { updatePlot(); });
+            for (int column = 0; column < selector->count(); ++column) {
+                selector->setCurrentIndex(column);
+                if (plot->hasData()) break;
+            }
+            if (!plot->hasData()) {
+                delete page;
+                continue;
+            }
+            resultPlots_->addTab(page, QFileInfo(name).completeBaseName());
+            additionalResultPages_.push_back(page);
+        }
+        return true;
+    }
+
     bool loadProjectResultGraphs(const QString& directory, QString* error) {
         s11Plot_->clear();
+        sParameterSelector_->clear();
+        sParameterCsvPath_.clear();
         vswrPlot_->clear();
+        vswrSelector_->clear();
+        vswrCsvPath_.clear();
         wavePlot_->clear();
+        QStringList vswrResultPaths;
+        QStringList sParameterResultPaths;
+        static const QRegularExpression sParameterColumn(
+            QStringLiteral("^s[0-9]+[0-9]+_db$"),
+            QRegularExpression::CaseInsensitiveOption);
         for (const QString& name : projectResultFiles_.keys()) {
             if (!name.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)) {
                 continue;
@@ -2652,28 +3312,17 @@ private:
                 ? QStringLiteral("Frequency (GHz)")
                 : timeAxis ? QStringLiteral("Time (ns)") : xHeader;
 
-            const int s11Column =
-                findColumn(QStringLiteral("s11"), 1, true);
-            if (frequencyAxis && s11Column >= 0 && !s11Plot_->hasData()) {
-                const int s21Column =
-                    findColumn(QStringLiteral("s21"), 1, false);
-                s11Plot_->loadCsv(
-                    path, 0, s11Column, xScale, 1.0, s21Column,
-                    headers[s11Column].trimmed(),
-                    s21Column >= 0 ? headers[s21Column].trimmed() : QString());
+            if (frequencyAxis &&
+                std::any_of(headers.cbegin() + 1, headers.cend(),
+                            [](const QString& header) {
+                    return sParameterColumn.match(header.trimmed()).hasMatch();
+                })) {
+                sParameterResultPaths.push_back(path);
             }
-
             const int vswrColumn =
                 findColumn(QStringLiteral("vswr"), 1, false);
-            if (frequencyAxis && vswrColumn >= 0 && !vswrPlot_->hasData()) {
-                int secondVswrColumn = findColumn(
-                    QStringLiteral("vswr"), vswrColumn + 1, false);
-                vswrPlot_->loadCsv(
-                    path, 0, vswrColumn, xScale, 1.0, secondVswrColumn,
-                    headers[vswrColumn].trimmed(),
-                    secondVswrColumn >= 0
-                        ? headers[secondVswrColumn].trimmed()
-                        : QString());
+            if (frequencyAxis && vswrColumn >= 0) {
+                vswrResultPaths.push_back(path);
             }
 
             if (timeAxis && !wavePlot_->hasData()) {
@@ -2691,7 +3340,13 @@ private:
                         : QString());
             }
         }
-        return true;
+        if (!loadSParameterGraphs(sParameterResultPaths, error)) {
+            return false;
+        }
+        if (!loadVSWRGraphs(vswrResultPaths, error)) {
+            return false;
+        }
+        return loadAdditionalResultPlots(directory, error);
     }
 
     void newProject() {
@@ -2744,8 +3399,13 @@ private:
         geometryHistory_.clear();
         geometryParameters_.clear();
         geometryMaterials_.clear();
+        clearAdditionalResultPlots();
         s11Plot_->clear();
+        sParameterSelector_->clear();
+        sParameterCsvPath_.clear();
         vswrPlot_->clear();
+        vswrSelector_->clear();
+        vswrCsvPath_.clear();
         wavePlot_->clear();
         view_->setDrawMode({});
         topViewEnabled_ = false;
@@ -2759,14 +3419,8 @@ private:
         meshDivisions_->setValue(30);
         maxTimesteps_->setValue(20000);
         boundary_->setCurrentIndex(0);
-        portDirection_->setCurrentIndex(portDirection_->findData(QStringLiteral("z")));
-        portStartX_->setValue(0.0);
-        portStartY_->setValue(0.0);
-        portStartZ_->setValue(0.0);
-        portStopX_->setValue(0.0);
-        portStopY_->setValue(0.0);
-        portStopZ_->setValue(1.0);
-        portImpedance_->setValue(50.0);
+        portsTable_->setRowCount(0);
+        updatePortVisualization();
         updateParameterList();
         setProjectCanvasAppearance(false);
     }
@@ -2893,14 +3547,8 @@ private:
         simulation.meshDivisions = static_cast<int>(meshDivisions_->value());
         simulation.maximumTimesteps = static_cast<int>(maxTimesteps_->value());
         simulation.boundary = boundary_->currentData().toString();
-        simulation.portAxis = portDirection_->currentData().toString();
-        simulation.portStartXmm = portStartX_->value();
-        simulation.portStartYmm = portStartY_->value();
-        simulation.portStartZmm = portStartZ_->value();
-        simulation.portStopXmm = portStopX_->value();
-        simulation.portStopYmm = portStopY_->value();
-        simulation.portStopZmm = portStopZ_->value();
-        simulation.portImpedanceOhm = portImpedance_->value();
+        simulation.ports = readPorts(error);
+        if (error && !error->isEmpty()) return false;
         simulation.engine = engine_->currentData().toString();
         project.resultKind = resultKind_;
         project.resultFiles = projectResultFiles_;
@@ -2948,6 +3596,17 @@ private:
                     project.resultFiles.insert(name, data);
                 }
                 const QDir resultRoot(resultDirectory_);
+                static const QRegularExpression touchstoneName(
+                    QStringLiteral("^s_parameters_scene\\.s[0-9]+p$"),
+                    QRegularExpression::CaseInsensitiveOption);
+                for (const QString& name :
+                     resultRoot.entryList(QDir::Files | QDir::NoDotAndDotDot,
+                                          QDir::Name)) {
+                    if (!touchstoneName.match(name).hasMatch()) continue;
+                    QByteArray data;
+                    if (!readAsset(resultRoot.filePath(name), &data)) return false;
+                    project.resultFiles.insert(name, data);
+                }
                 const QStringList summaries = resultRoot.entryList(
                     {QStringLiteral("summary*.json")},
                     QDir::Files | QDir::NoDotAndDotDot);
@@ -3055,15 +3714,7 @@ private:
         meshDivisions_->setValue(project.simulation.meshDivisions);
         maxTimesteps_->setValue(project.simulation.maximumTimesteps);
         boundary_->setCurrentIndex(boundary_->findData(project.simulation.boundary));
-        portDirection_->setCurrentIndex(
-            portDirection_->findData(project.simulation.portAxis));
-        portStartX_->setValue(project.simulation.portStartXmm);
-        portStartY_->setValue(project.simulation.portStartYmm);
-        portStartZ_->setValue(project.simulation.portStartZmm);
-        portStopX_->setValue(project.simulation.portStopXmm);
-        portStopY_->setValue(project.simulation.portStopYmm);
-        portStopZ_->setValue(project.simulation.portStopZmm);
-        portImpedance_->setValue(project.simulation.portImpedanceOhm);
+        loadPorts(project.simulation.ports);
         engine_->setCurrentIndex(engine_->findData(project.simulation.engine));
 
         resultDirectory_ = stagedResultPath;
@@ -3073,8 +3724,13 @@ private:
         geometryHistory_ = project.featureHistory;
         geometryParameters_ = project.parameters;
         geometryMaterials_ = project.materials;
+        clearAdditionalResultPlots();
         s11Plot_->clear();
+        sParameterSelector_->clear();
+        sParameterCsvPath_.clear();
         vswrPlot_->clear();
+        vswrSelector_->clear();
+        vswrCsvPath_.clear();
         wavePlot_->clear();
         view_->setDrawMode({});
         view_->setTopView(false);
@@ -3082,7 +3738,6 @@ private:
         refreshList(objects_.empty() ? -1 : 0);
         loadSelected();
         loadSelectedMaterial();
-        updatePortVisualization();
         updateParameterList();
         if (!stagedResultPath.isEmpty() &&
             !loadProjectResultGraphs(stagedResultPath, error)) {
@@ -3090,9 +3745,9 @@ private:
         }
         if (s11Plot_->hasData()) {
             status_->setText(QStringLiteral("Project result graphs loaded."));
-            resultPlots_->setCurrentWidget(s11Plot_);
+            resultPlots_->setCurrentWidget(sParametersPage_);
         } else if (vswrPlot_->hasData()) {
-            resultPlots_->setCurrentWidget(vswrPlot_);
+            resultPlots_->setCurrentWidget(vswrPage_);
         } else if (wavePlot_->hasData()) {
             resultPlots_->setCurrentWidget(wavePlot_);
         } else if (!projectResultFiles_.isEmpty()) {
@@ -3649,23 +4304,33 @@ private:
         refreshProjectMaterialList();
         auto* excitations = new QTreeWidgetItem(objectsList_,
                                                  {QStringLiteral("Excitations")});
-        auto* port = new QTreeWidgetItem(
-            excitations,
-            {QStringLiteral("Lumped port — %1")
-                 .arg(portDirection_->currentData().toString().toUpper())});
-        new QTreeWidgetItem(
-            port, {QStringLiteral("Start: (%1, %2, %3) mm")
-                       .arg(portStartX_->value())
-                       .arg(portStartY_->value())
-                       .arg(portStartZ_->value())});
-        new QTreeWidgetItem(
-            port, {QStringLiteral("Stop: (%1, %2, %3) mm")
-                       .arg(portStopX_->value())
-                       .arg(portStopY_->value())
-                       .arg(portStopZ_->value())});
-        new QTreeWidgetItem(
-            port, {QStringLiteral("Impedance: %1 Ω")
-                       .arg(portImpedance_->value())});
+        QString portError;
+        const auto ports = readPorts(&portError);
+        for (size_t index = 0; index < ports.size(); ++index) {
+            const auto& port = ports[index];
+            const QString label = port.type == QStringLiteral("rect-waveguide")
+                ? QStringLiteral("Rectangular waveguide %1 — %2")
+                      .arg(port.mode, port.axis.toUpper())
+                : QStringLiteral("Lumped port — %1").arg(port.axis.toUpper());
+            auto* portItem = new QTreeWidgetItem(
+                excitations,
+                {QStringLiteral("Port %1: %2").arg(index + 1).arg(label)});
+            new QTreeWidgetItem(
+                portItem,
+                {QStringLiteral("Start: (%1, %2, %3) mm")
+                     .arg(port.startXmm)
+                     .arg(port.startYmm)
+                     .arg(port.startZmm)});
+            new QTreeWidgetItem(
+                portItem,
+                {QStringLiteral("Stop: (%1, %2, %3) mm")
+                     .arg(port.stopXmm)
+                     .arg(port.stopYmm)
+                     .arg(port.stopZmm)});
+            new QTreeWidgetItem(
+                portItem,
+                {QStringLiteral("Impedance: %1 Ω").arg(port.impedanceOhm)});
+        }
         for (const QString& assetPath : solverFiles_.keys()) {
             const QString assetName = QFileInfo(assetPath).fileName();
             if (assetName.contains(QStringLiteral("port"), Qt::CaseInsensitive)) {
@@ -3678,7 +4343,8 @@ private:
                                              {QStringLiteral("Results")});
         projectResultsList_->clear();
         QStringList resultNames = projectResultFiles_.keys();
-        if (resultNames.isEmpty() && !resultDirectory_.isEmpty() &&
+        if (resultKind_ == QStringLiteral("cad") && resultNames.isEmpty() &&
+            !resultDirectory_.isEmpty() &&
             QFileInfo(resultDirectory_).isDir()) {
             resultNames = QDir(resultDirectory_).entryList(
                 QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
@@ -3830,18 +4496,53 @@ private:
                 QStringLiteral("Frequency stop must be greater than frequency start."));
             return;
         }
-        if (!validPortCoordinates()) {
+        QString portError;
+        const std::vector<rfsim::OemPort> configuredPorts =
+            readPorts(&portError);
+        if (configuredPorts.empty() || !portError.isEmpty()) {
             QMessageBox::warning(
                 this, QStringLiteral("Invalid port"),
-                QStringLiteral("Port start/stop must differ only along the selected X/Y/Z axis, with start before stop."));
+                portError.isEmpty()
+                    ? QStringLiteral("Add at least one port before running.")
+                    : portError);
             return;
         }
-        const QString output = outputOverride.isEmpty()
-            ? QFileDialog::getExistingDirectory(
-                  this, QStringLiteral("Choose solver output directory"),
-                  QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation))
-            : outputOverride;
-        if (output.isEmpty()) return;
+        QString output = outputOverride;
+        if (output.isEmpty()) {
+            QString error;
+            output = createTemporaryResultsDirectory(&error);
+            if (output.isEmpty()) {
+                QMessageBox::critical(
+                    this, QStringLiteral("Simulation output unavailable"), error);
+                return;
+            }
+        }
+
+        analysisPanelAction_->setChecked(true);
+        analysisTabs_->setCurrentWidget(messagesPage_);
+        progressBar_->setRange(0, 100);
+        progressBar_->setValue(0);
+        progressBar_->show();
+        solverProgressBuffer_.clear();
+        solverExcitationIndex_ = 1;
+        solverExcitationCount_ = static_cast<int>(configuredPorts.size());
+        clearAdditionalResultPlots();
+        s11Plot_->clear();
+        sParameterSelector_->clear();
+        sParameterCsvPath_.clear();
+        vswrPlot_->clear();
+        vswrSelector_->clear();
+        vswrCsvPath_.clear();
+        wavePlot_->clear();
+        resultDirectory_ = output;
+        solverFiles_.clear();
+        projectResultFiles_.clear();
+        resultKind_ = QStringLiteral("none");
+        refreshList(currentObjectIndex());
+        log_->clear();
+        log_->appendPlainText(QStringLiteral("Preparing simulation..."));
+        status_->setText(QStringLiteral("Preparing simulation..."));
+        statusBar()->showMessage(QStringLiteral("Preparing simulation..."));
 
         try {
             const QString sceneDirectory = output + QStringLiteral("/cad_scene");
@@ -3929,20 +4630,23 @@ private:
             scene.insert(QStringLiteral("solids"), solids);
             scene.insert(QStringLiteral("bounds_mm"),
                          QJsonArray{minX, minY, minZ, maxX, maxY, maxZ});
-            const QJsonArray portStart = {
-                portStartX_->value(), portStartY_->value(), portStartZ_->value()
-            };
-            const QJsonArray portStop = {
-                portStopX_->value(), portStopY_->value(), portStopZ_->value()
-            };
-            scene.insert(QStringLiteral("port_start_mm"), portStart);
-            scene.insert(QStringLiteral("port_stop_mm"), portStop);
-            scene.insert(QStringLiteral("port_axis"),
-                         portDirection_->currentData().toString());
-            scene.insert(QStringLiteral("port_x_mm"), portStartX_->value());
-            scene.insert(QStringLiteral("port_y_mm"), portStartY_->value());
-            scene.insert(QStringLiteral("port_z_start_mm"), portStartZ_->value());
-            scene.insert(QStringLiteral("port_z_stop_mm"), portStopZ_->value());
+            QJsonArray portsScene;
+            for (const auto& port : configuredPorts) {
+                QJsonObject portScene;
+                portScene.insert(QStringLiteral("type"), port.type);
+                portScene.insert(QStringLiteral("mode"), port.mode);
+                portScene.insert(QStringLiteral("axis"), port.axis);
+                portScene.insert(
+                    QStringLiteral("start_mm"),
+                    QJsonArray{port.startXmm, port.startYmm, port.startZmm});
+                portScene.insert(
+                    QStringLiteral("stop_mm"),
+                    QJsonArray{port.stopXmm, port.stopYmm, port.stopZmm});
+                portScene.insert(QStringLiteral("impedance_ohm"),
+                                  port.impedanceOhm);
+                portsScene.append(portScene);
+            }
+            scene.insert(QStringLiteral("ports"), portsScene);
             QFile sceneFile(scenePath);
             if (!sceneFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
                 throw std::runtime_error("Cannot write the CAD solver scene file.");
@@ -3950,20 +4654,21 @@ private:
             sceneFile.write(QJsonDocument(scene).toJson(QJsonDocument::Indented));
             sceneFile.close();
 
-            resultDirectory_ = output;
-            solverFiles_.clear();
-            projectResultFiles_.clear();
-            resultKind_ = QStringLiteral("cad");
             updateParameterList();
-            log_->clear();
+            log_->appendPlainText(QStringLiteral("Starting openEMS simulation..."));
+            if (configuredPorts.size() > 1) {
+                log_->appendPlainText(
+                    QStringLiteral("%1 ports configured; full S-parameter matrix enabled.")
+                        .arg(configuredPorts.size()));
+            }
+            log_->appendPlainText(QStringLiteral("Output directory: %1").arg(output));
             status_->setText(QStringLiteral("Running openEMS on %1 CAD solid(s)…")
                                  .arg(objects_.size()));
             statusBar()->showMessage(QStringLiteral("CAD simulation running…"));
             runButton_->setEnabled(false);
             cancelButton_->setEnabled(true);
             cancelRequested_ = false;
-            progressBar_->setRange(0, 0);
-            progressBar_->show();
+            progressBar_->setValue(5);
             solverProcess_->setProgram(qEnvironmentVariable(
                 "OPENEMS_PYTHON", QString::fromUtf8(RF_SIM_PYTHON_DEFAULT)));
             solverProcess_->setArguments({
@@ -3982,12 +4687,13 @@ private:
                 QStringLiteral("--frequency-points"),
                 QString::number(static_cast<int>(frequencyPoints_->value())),
                 QStringLiteral("--boundary"),
-                boundary_->currentData().toString(),
-                QStringLiteral("--port-impedance"),
-                QString::number(portImpedance_->value(), 'g', 12)
+                boundary_->currentData().toString()
             });
             solverProcess_->start();
         } catch (const std::exception& exception) {
+            progressBar_->hide();
+            status_->setText(QStringLiteral("Simulation preparation failed."));
+            log_->appendPlainText(QString::fromUtf8(exception.what()));
             QMessageBox::critical(this, QStringLiteral("CAD export failed"),
                                   QString::fromUtf8(exception.what()));
         }
@@ -4015,7 +4721,10 @@ private:
     std::unique_ptr<QTemporaryDir> simulationResultsTempDir_;
     QMap<QString, QByteArray> solverFiles_;
     QMap<QString, QByteArray> projectResultFiles_;
+    std::vector<QWidget*> additionalResultPages_;
     rfsim::OemSimulationSettings projectSimulationSettings_;
+    int solverExcitationIndex_ = 1;
+    int solverExcitationCount_ = 1;
     std::vector<rfsim::OemParameter> geometryParameters_;
     std::vector<rfsim::OemMaterial> geometryMaterials_;
     std::vector<rfsim::OemFeature> geometryHistory_;
@@ -4030,10 +4739,18 @@ private:
     QWidget* navigationPanel_ = nullptr;
     QDockWidget* navigationDock_ = nullptr;
     QWidget* analysisPanel_ = nullptr;
+    QTabWidget* analysisTabs_ = nullptr;
+    QWidget* messagesPage_ = nullptr;
     QSplitter* contentSplitter_ = nullptr;
     QAction* analysisPanelAction_ = nullptr;
     QSplitter* editorSplitter_ = nullptr;
     QTabWidget* resultPlots_ = nullptr;
+    QWidget* sParametersPage_ = nullptr;
+    QComboBox* sParameterSelector_ = nullptr;
+    QString sParameterCsvPath_;
+    QWidget* vswrPage_ = nullptr;
+    QComboBox* vswrSelector_ = nullptr;
+    QString vswrCsvPath_;
     ModelView* view_ = nullptr;
     QDoubleSpinBox* x_ = nullptr;
     QDoubleSpinBox* y_ = nullptr;
@@ -4047,14 +4764,7 @@ private:
     QDoubleSpinBox* rotationX_ = nullptr;
     QDoubleSpinBox* rotationY_ = nullptr;
     QDoubleSpinBox* rotationZ_ = nullptr;
-    QDoubleSpinBox* portStartX_ = nullptr;
-    QDoubleSpinBox* portStartY_ = nullptr;
-    QDoubleSpinBox* portStartZ_ = nullptr;
-    QDoubleSpinBox* portStopX_ = nullptr;
-    QDoubleSpinBox* portStopY_ = nullptr;
-    QDoubleSpinBox* portStopZ_ = nullptr;
-    QComboBox* portDirection_ = nullptr;
-    QDoubleSpinBox* portImpedance_ = nullptr;
+    QTableWidget* portsTable_ = nullptr;
     QDoubleSpinBox* frequencyStart_ = nullptr;
     QDoubleSpinBox* frequencyStop_ = nullptr;
     QDoubleSpinBox* frequencyPoints_ = nullptr;
@@ -4079,9 +4789,12 @@ private:
     PlotWidget* wavePlot_ = nullptr;
     QTableWidget* parameterTable_ = nullptr;
     QProcess* solverProcess_ = nullptr;
+    QString solverProgressBuffer_;
     bool cancelRequested_ = false;
     bool smokeTestExpectedCancel_ = false;
     bool smokeTestMode_ = false;
+    bool smokeTestSawSolverOutput_ = false;
+    bool smokeTestClearedLoadedResults_ = false;
     int smokeTestExitCode_ = 0;
 };
 
@@ -4144,7 +4857,8 @@ int main(int argc, char* argv[]) {
         });
     }
     const int applicationResult = application.exec();
-    if (mode == QStringLiteral("--smoke-solver") ||
+    const bool isSmokeResultMode =
+        mode == QStringLiteral("--smoke-solver") ||
         mode == QStringLiteral("--smoke-x-port") ||
         mode == QStringLiteral("--smoke-draw") ||
         mode == QStringLiteral("--smoke-curve-draw") ||
@@ -4153,7 +4867,8 @@ int main(int argc, char* argv[]) {
         mode == QStringLiteral("--smoke-empty-startup") ||
         mode == QStringLiteral("--smoke-open-project") ||
         mode == QStringLiteral("--smoke-open-project-run") ||
-        mode == QStringLiteral("--smoke-cancel")) {
+        mode == QStringLiteral("--smoke-cancel");
+    if (isSmokeResultMode) {
         return window.smokeTestExitCode();
     }
     return applicationResult;

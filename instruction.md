@@ -109,24 +109,22 @@ thuộc tần số, tensor, từ thẩm tùy chỉnh hoặc thư viện vật li
 ## 5. Thiết lập port và bài toán
 
 Trang **Excitations** có thiết lập chung cho scene CAD: frequency range, số
-điểm, mesh divisions per wavelength, maximum timesteps, boundary, lumped port
-và CPU/GPU. Các lựa chọn **Solver Selection** và **Domain** trên Ribbon hiện
-chỉ là giao diện; chưa điều khiển backend. **Solver Options** chưa có nội dung.
+điểm, mesh divisions per wavelength, maximum timesteps, boundary và CPU/GPU.
+Trong bảng **Ports**, dùng **Add port**/**Remove port** để tự thiết kế số port
+cần thiết; ứng dụng không tự tạo hay định vị port. Mỗi hàng lưu riêng loại,
+mode, trục, start/stop và trở kháng trong `.oem`.
 
-### CAD lumped port
+Các loại hiện hỗ trợ là `lumped` và `rect-waveguide`. Với lumped, start và
+stop chỉ được khác nhau dọc theo trục đã chọn, theo chiều dương. Với
+rect-waveguide, nhập mặt cắt chữ nhật và mode TE10, TE20, TE01 hoặc TE11;
+tọa độ/mode của từng port được dùng nguyên trạng. Cấu hình có thể lưu rồi mở
+lại cùng project.
 
-Prototype hỗ trợ **một lumped port** cho scene CAD:
-
-1. Chọn trục **X**, **Y** hoặc **Z**.
-2. Nhập tọa độ Start X/Y/Z và Stop X/Y/Z. Hai đầu mút phải chỉ khác nhau
-   trên trục đã chọn, và Start phải nhỏ hơn Stop trên trục đó.
-3. Nhập trở kháng port.
-4. Quan sát marker đỏ trong viewport. Port phải bắc qua feed gap phù hợp,
-   không xuyên vật liệu kim loại.
-
-Đây là port đơn; chưa có nhiều CAD ports, port coaxial/discrete/Floquet hoặc
-nguồn dòng/áp tùy ý. Mô hình phải có cấu trúc cấp nguồn vật lý phù hợp thì
-S11 mới có ý nghĩa thiết kế. Port mặc định chỉ là giá trị khởi đầu.
+Khi có N port, solver chạy một lượt kích thích riêng cho từng port và tính
+ma trận Sij N×N. Vì vậy thời gian chạy tăng theo số port. Biểu đồ
+**S-parameters** có bộ chọn Sij; kết quả đầy đủ cũng được xuất vào CSV và
+Touchstone `.sNp`. Solver Selection và Domain trên Ribbon hiện chưa điều khiển
+backend; Solver Options chưa có nội dung.
 
 ## 6. Chạy, theo dõi và hủy mô phỏng
 
@@ -143,13 +141,18 @@ không bao gồm toàn bộ overhead của hệ điều hành, backend hoặc fi
 
 Mở tab **Results**:
 
-- CAD: S11 và waveform của scene hiện tại.
+- CAD: chọn Sij trong biểu đồ **S-parameters**; có thêm VSWR và waveform.
+- CSV chứa toàn bộ ma trận Sij và VSWR theo port; Touchstone `.sNp` chứa ma
+  trận S đầy đủ.
+- Mỗi CSV kết quả có cột số được mở thành tab biểu đồ riêng; chọn cột Y trong
+  tab để xem từng đại lượng. CSV dạng `x_mm,y_mm,...` được hiển thị thành các
+  bản đồ trường riêng theo từng cột giá trị.
 - **Open Results Folder** mở thư mục đầu ra trong file manager.
 
 Các file OEM mẫu cũ được giữ làm dữ liệu kiểm thử; hình học và tham số được
 đọc từ project, không được dựng sẵn trong ứng dụng. Ứng dụng hiện chưa có
-trình hiển thị chuyên biệt cho trường gần/xa; các CSV có trục tần số/thời gian
-và cột S-parameter, VSWR hoặc điện áp được nhận diện để vẽ đồ thị chung.
+trình hiển thị vật lý chuyên biệt cho trường gần/xa; dữ liệu trường dạng CSV
+được hiển thị thành bản đồ giá trị 2D, không phải mô phỏng thể tích 3D.
 
 Smith Chart, trường E/H thể tích 3D, transient animation, surface current,
 Poynting vector và far-field cho scene CAD tùy ý chưa được triển khai. Không

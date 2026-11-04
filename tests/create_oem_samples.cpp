@@ -125,13 +125,27 @@ rfsim::OemProjectDocument waveguideProject(const QString& outputDirectory) {
     constexpr double length = 100.0;
     constexpr double portDepth = 5.0;
     constexpr double wallThickness = 1.27;
-    simulation.portAxis = QStringLiteral("y");
-    simulation.portStartXmm = width / 2.0;
-    simulation.portStartYmm = 0.0;
-    simulation.portStartZmm = 0.0;
-    simulation.portStopXmm = width / 2.0;
-    simulation.portStopYmm = height;
-    simulation.portStopZmm = 0.0;
+    constexpr double firstPortLow = 5.5589370430107525;
+    constexpr double firstPortHigh = 10.558937043010753;
+    constexpr double secondPortLow = 89.441062956989242;
+    constexpr double secondPortHigh = 94.441062956989242;
+    rfsim::OemPort port1;
+    port1.type = QStringLiteral("rect-waveguide");
+    port1.mode = QStringLiteral("TE10");
+    port1.axis = QStringLiteral("z");
+    port1.startZmm = firstPortLow;
+    port1.stopXmm = width;
+    port1.stopYmm = height;
+    port1.stopZmm = firstPortHigh;
+    rfsim::OemPort port2;
+    port2.type = QStringLiteral("rect-waveguide");
+    port2.mode = QStringLiteral("TE10");
+    port2.axis = QStringLiteral("z");
+    port2.startZmm = secondPortHigh;
+    port2.stopXmm = width;
+    port2.stopYmm = height;
+    port2.stopZmm = secondPortLow;
+    simulation.ports = {port1, port2};
 
     project.materials.push_back(
         {QStringLiteral("mat-waveguide-wall"), QStringLiteral("Waveguide wall"),
@@ -308,6 +322,18 @@ void verifyProject(const QString& path, const QString& expectedKind,
         loaded.featureHistory.empty()) {
         throw std::runtime_error(
             QStringLiteral("Generated OEM sample failed round-trip validation: %1")
+                .arg(path).toStdString());
+    }
+    if (expectedKind == QStringLiteral("waveguide") &&
+        (loaded.simulation.ports.size() != 2 ||
+         loaded.simulation.ports[0].type !=
+             QStringLiteral("rect-waveguide") ||
+         loaded.simulation.ports[1].type !=
+             QStringLiteral("rect-waveguide") ||
+         loaded.simulation.ports[0].mode != QStringLiteral("TE10") ||
+         loaded.simulation.ports[1].mode != QStringLiteral("TE10"))) {
+        throw std::runtime_error(
+            QStringLiteral("Generated waveguide OEM is missing its explicit second port: %1")
                 .arg(path).toStdString());
     }
 }

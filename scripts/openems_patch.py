@@ -4,6 +4,8 @@
 import argparse
 import csv
 import json
+import subprocess
+import sys
 import shutil
 import time
 from pathlib import Path
@@ -35,12 +37,205 @@ def write_touchstone_1port(
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
+def write_touchstone_nport(
+    path: Path, frequencies_hz: np.ndarray, scattering: np.ndarray,
+    reference_ohms: list[float],
+) -> None:
+    port_count = scattering.shape[1]
+    lines = [
+        "[Version] 2.1",
+        f"# Hz S RI R {reference_ohms[0]:g}",
+        f"[Number of Ports] {port_count}",
+        f"[Number of Frequencies] {len(frequencies_hz)}",
+        "[Reference] " + " ".join(f"{value:g}" for value in reference_ohms),
+        "[Matrix Format] Full",
+        "[Network Data]",
+    ]
+    for frequency_index, frequency in enumerate(frequencies_hz):
+        values = [f"{float(frequency):.17g}"]
+        for source_index in range(port_count):
+            for response_index in range(port_count):
+                value = scattering[
+                    frequency_index, response_index, source_index
+                ]
+                values.extend((f"{value.real:.17g}", f"{value.imag:.17g}"))
+        lines.append(" ".join(values))
+    lines.append("[End]")
+    path.write_text("\n".join(lines) + "\n", encoding="ascii")
+
+
+def run_multiport_scene(args: argparse.Namespace, scene: dict) -> bool:
+    if args.port_excitation is not None:
+        return False
+    ports = scene.get("ports")
+    if not isinstance(ports, list) or not ports:
+        return False
+    if len(ports) == 1:
+        return False
+
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    run_arguments = []
+    skip_next = False
+    for argument in sys.argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if argument in ("--output", "--port-excitation"):
+            skip_next = True
+            continue
+        run_arguments.append(argument)
+
+    excitation_data = []
+    for source_index in range(len(ports)):
+        run_directory = output / f"excitation_{source_index + 1}"
+        run_directory.mkdir(parents=True, exist_ok=True)
+        print(
+            f"Running S-parameter excitation {source_index + 1}/{len(ports)}",
+            flush=True,
+        )
+        command = [
+            sys.executable, str(Path(__file__).resolve()), *run_arguments,
+            "--output", str(run_directory),
+            "--port-excitation", str(source_index),
+        ]
+        completed = subprocess.run(command, check=False)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"Port {source_index + 1} excitation failed "
+                f"with exit code {completed.returncode}"
+            )
+        response_path = run_directory / "excitation.csv"
+        with response_path.open(newline="", encoding="utf-8") as response_file:
+            rows = list(csv.DictReader(response_file))
+        if not rows:
+            raise RuntimeError(
+                f"Port {source_index + 1} produced no S-parameter data"
+            )
+        excitation_data.append((run_directory, rows))
+
+    frequency_values = np.asarray([
+        float(row["frequency_hz"]) for row in excitation_data[0][1]
+    ])
+    port_count = len(ports)
+    scattering = np.zeros(
+        (len(frequency_values), port_count, port_count), dtype=np.complex128
+    )
+    for source_index, (_, rows) in enumerate(excitation_data):
+        if len(rows) != len(frequency_values):
+            raise RuntimeError("Port excitations returned different sweep lengths")
+        for frequency_index, row in enumerate(rows):
+            if not np.isclose(
+                float(row["frequency_hz"]),
+                frequency_values[frequency_index],
+                rtol=1e-12,
+            ):
+                raise RuntimeError("Port excitations returned mismatched frequencies")
+            for response_index in range(port_count):
+                scattering[frequency_index, response_index, source_index] = (
+                    float(row[f"s{response_index + 1}_real"])
+                    + 1j * float(row[f"s{response_index + 1}_imag"])
+                )
+
+    s11 = scattering[:, 0, 0]
+    s11_db = 20 * np.log10(
+        np.maximum(np.abs(s11), np.finfo(float).tiny)
+    )
+    headers = [
+        "frequency_hz", "s11_real", "s11_imag", "s11_db", "vswr_port_1"
+    ]
+    matrix_columns = []
+    for source_index in range(port_count):
+        for response_index in range(port_count):
+            if source_index == 0 and response_index == 0:
+                continue
+            label = f"s{response_index + 1}{source_index + 1}_db"
+            headers.append(label)
+            matrix_columns.append((response_index, source_index))
+    headers.extend(
+        f"vswr_port_{port_index + 1}"
+        for port_index in range(1, port_count)
+    )
+    with (output / "s11_scene.csv").open("w", newline="") as result_file:
+        writer = csv.writer(result_file)
+        writer.writerow(headers)
+        for frequency_index, frequency in enumerate(frequency_values):
+            row = [
+                float(frequency),
+                float(s11[frequency_index].real),
+                float(s11[frequency_index].imag),
+                float(s11_db[frequency_index]),
+                float(
+                    (1 + abs(s11[frequency_index])) /
+                    max(1 - abs(s11[frequency_index]), 1e-12)
+                ),
+            ]
+            row.extend(
+                float(20 * np.log10(max(
+                    abs(scattering[frequency_index, response_index, source_index]),
+                    np.finfo(float).tiny,
+                )))
+                for response_index, source_index in matrix_columns
+            )
+            row.extend(
+                float(
+                    (1 + abs(scattering[
+                        frequency_index, port_index, port_index
+                    ])) /
+                    max(1 - abs(scattering[
+                        frequency_index, port_index, port_index
+                    ]), 1e-12)
+                )
+                for port_index in range(1, port_count)
+            )
+            writer.writerow(row)
+
+    write_touchstone_1port(
+        output / "s11_scene.s1p", frequency_values, s11, ports[0]["impedance_ohm"]
+    )
+    write_touchstone_nport(
+        output / f"s_parameters_scene.s{port_count}p",
+        frequency_values, scattering,
+        [float(port["impedance_ohm"]) for port in ports],
+    )
+    shutil.copyfile(
+        excitation_data[0][0] / "excitation_waveform.csv",
+        output / "waveform_scene.csv",
+    )
+
+    models_directory = output / "models"
+    models_directory.mkdir(exist_ok=True)
+    for source_index, (run_directory, _) in enumerate(excitation_data):
+        source_models = run_directory / "models"
+        if source_models.is_dir():
+            shutil.copytree(
+                source_models,
+                models_directory / f"excitation_{source_index + 1}",
+                dirs_exist_ok=True,
+            )
+    summary = {
+        "simulation_kind": "cad_multiport",
+        "engine_requested": args.engine,
+        "port_count": port_count,
+        "frequency_points": len(frequency_values),
+        "timesteps_limit": args.timesteps,
+        "s_parameters_touchstone": f"s_parameters_scene.s{port_count}p",
+    }
+    (output / "summary_scene.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(summary, sort_keys=True), flush=True)
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--engine", choices=("cpu", "gpu"), default="cpu")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--scene", type=Path,
                         help="JSON scene containing closed STL solids in millimeters")
+    parser.add_argument("--port-excitation", type=int,
+                        help=argparse.SUPPRESS)
     parser.add_argument("--timesteps", type=int, default=30000)
     parser.add_argument("--mesh-div", type=int, default=30)
     parser.add_argument("--f-start-ghz", type=float, default=1.0)
@@ -65,6 +260,15 @@ def main() -> None:
         parser.error("invalid timestep, mesh, frequency, sample-count, or port settings")
     if args.max_cells < 1000:
         parser.error("--max-cells must be at least 1000")
+    if args.port_excitation is not None and args.port_excitation < 0:
+        parser.error("--port-excitation must be non-negative")
+    if args.scene and args.port_excitation is None:
+        scene_data = json.loads(args.scene.read_text(encoding="utf-8"))
+        try:
+            if run_multiport_scene(args, scene_data):
+                return
+        except (OSError, RuntimeError, ValueError, KeyError) as error:
+            parser.exit(1, f"Multiport simulation failed: {error}\n")
     if not args.scene:
         antenna_values = (
             args.substrate_width_mm,
@@ -115,6 +319,9 @@ def main() -> None:
     fdtd.SetCSX(csx)
     mesh = csx.GetGrid()
     mesh.SetDeltaUnit(1e-3)
+    response_port = None
+    port1_type = "lumped"
+    port1_mode = ""
     if args.scene:
         scene_path = args.scene.resolve()
         scene = json.loads(scene_path.read_text(encoding="utf-8"))
@@ -124,46 +331,111 @@ def main() -> None:
         min_x, min_y, min_z, max_x, max_y, max_z = map(float, bounds)
         if not (min_x < max_x and min_y < max_y and min_z < max_z):
             parser.error("scene bounds must have positive size in all axes")
-        if "port_start_mm" in scene and "port_stop_mm" in scene:
-            port_start = np.asarray(scene["port_start_mm"], dtype=float)
-            port_stop = np.asarray(scene["port_stop_mm"], dtype=float)
-            port_direction = str(scene.get("port_axis", "z"))
+
+        def parse_port(config, fallback=None):
+            source = config if config is not None else fallback
+            if not isinstance(source, dict):
+                parser.error("port configuration must be an object")
+            try:
+                start = np.asarray(source["start_mm"], dtype=float)
+                stop = np.asarray(source["stop_mm"], dtype=float)
+                port_type = str(source.get("type", "lumped"))
+                mode = str(source.get("mode", ""))
+                axis = str(source.get("axis", "z"))
+                impedance = float(source.get("impedance_ohm", args.port_impedance))
+            except (KeyError, TypeError, ValueError):
+                parser.error("port configuration is incomplete or invalid")
+            if (
+                start.shape != (3,) or stop.shape != (3,)
+                or not np.all(np.isfinite(start))
+                or not np.all(np.isfinite(stop))
+                or axis not in ("x", "y", "z")
+                or port_type not in ("lumped", "rect-waveguide")
+                or not np.isfinite(impedance) or impedance <= 0
+            ):
+                parser.error("port configuration contains invalid coordinates or type")
+            axis_index = "xyz".index(axis)
+            transverse = [index for index in range(3) if index != axis_index]
+            if port_type == "lumped":
+                valid_shape = (
+                    start[axis_index] < stop[axis_index]
+                    and all(start[index] == stop[index] for index in transverse)
+                )
+            else:
+                valid_shape = (
+                    start[axis_index] != stop[axis_index]
+                    and all(start[index] < stop[index] for index in transverse)
+                    and mode in ("TE10", "TE20", "TE01", "TE11")
+                )
+            if not valid_shape:
+                parser.error("port coordinates do not match the configured port type")
+            return {
+                "start": start,
+                "stop": stop,
+                "type": port_type,
+                "mode": mode,
+                "axis": axis,
+                "impedance": impedance,
+            }
+
+        if "ports" in scene:
+            if not isinstance(scene["ports"], list):
+                parser.error("scene ports must be an array")
+            ports = [parse_port(config) for config in scene["ports"]]
+        elif "port1" in scene:
+            ports = [parse_port(scene["port1"])]
+            if "port2" in scene:
+                ports.append(parse_port(scene["port2"]))
         else:
-            port_start = np.array([
-                float(scene["port_x_mm"]), float(scene["port_y_mm"]),
-                float(scene["port_z_start_mm"])
-            ])
-            port_stop = np.array([
-                float(scene["port_x_mm"]), float(scene["port_y_mm"]),
-                float(scene["port_z_stop_mm"])
-            ])
-            port_direction = "z"
-        if (port_start.shape != (3,) or port_stop.shape != (3,) or
-                not np.all(np.isfinite(port_start)) or
-                not np.all(np.isfinite(port_stop)) or
-                port_direction not in ("x", "y", "z")):
-            parser.error("port start/stop must be finite 3D points with axis x, y, or z")
-        port_axis_index = "xyz".index(port_direction)
-        transverse = [axis for axis in range(3) if axis != port_axis_index]
-        if (not port_start[port_axis_index] < port_stop[port_axis_index] or
-                any(port_start[axis] != port_stop[axis] for axis in transverse)):
-            parser.error("lumped port endpoints must vary only along its positive axis")
+            legacy_port = None
+            if "port_start_mm" in scene and "port_stop_mm" in scene:
+                legacy_port = {
+                    "start_mm": scene["port_start_mm"],
+                    "stop_mm": scene["port_stop_mm"],
+                    "axis": scene.get("port_axis", "z"),
+                }
+            elif all(key in scene for key in (
+                    "port_x_mm", "port_y_mm", "port_z_start_mm",
+                    "port_z_stop_mm")):
+                legacy_port = {
+                    "start_mm": [
+                        scene["port_x_mm"], scene["port_y_mm"],
+                        scene["port_z_start_mm"],
+                    ],
+                    "stop_mm": [
+                        scene["port_x_mm"], scene["port_y_mm"],
+                        scene["port_z_stop_mm"],
+                    ],
+                    "axis": "z",
+                }
+            if legacy_port is None:
+                parser.error("scene must include at least one configured port")
+            ports = [parse_port(legacy_port)]
+        if not ports or len(ports) > 128:
+            parser.error("scene must contain between one and 128 configured ports")
+        if (args.port_excitation is not None and
+                args.port_excitation >= len(ports)):
+            parser.error("--port-excitation does not refer to a configured port")
+        port1_type = ports[0]["type"]
+        port1_mode = ports[0]["mode"]
         margin = max(mesh_resolution * 8, 10.0)
-        z_start = min(min_z - margin, port_start[2] - margin * 0.1,
-                      port_stop[2] - margin * 0.1)
-        z_stop = max(max_z + margin, port_start[2] + margin * 0.1,
-                     port_stop[2] + margin * 0.1)
-        mesh.AddLine(
-            "x", sorted({min_x - margin, min_x, port_start[0], port_stop[0],
-                         max_x, max_x + margin})
-        )
-        mesh.AddLine(
-            "y", sorted({min_y - margin, min_y, port_start[1], port_stop[1],
-                         max_y, max_y + margin})
-        )
-        mesh.AddLine(
-            "z", sorted({z_start, min_z, max_z, port_start[2], port_stop[2], z_stop})
-        )
+        all_port_z = [
+            float(coordinate)
+            for port_config in ports
+            for coordinate in (port_config["start"][2], port_config["stop"][2])
+        ]
+        z_start = min([min_z - margin] + [z - margin * 0.1 for z in all_port_z])
+        z_stop = max([max_z + margin] + [z + margin * 0.1 for z in all_port_z])
+        x_lines = {min_x - margin, min_x, max_x, max_x + margin}
+        y_lines = {min_y - margin, min_y, max_y, max_y + margin}
+        z_lines = {z_start, min_z, max_z, z_stop}
+        for port_config in ports:
+            x_lines.update((port_config["start"][0], port_config["stop"][0]))
+            y_lines.update((port_config["start"][1], port_config["stop"][1]))
+            z_lines.update((port_config["start"][2], port_config["stop"][2]))
+        mesh.AddLine("x", sorted(x_lines))
+        mesh.AddLine("y", sorted(y_lines))
+        mesh.AddLine("z", sorted(z_lines))
         for index, solid in enumerate(scene["solids"]):
             stl_path = Path(solid["stl"]).resolve()
             if not stl_path.is_file():
@@ -192,12 +464,51 @@ def main() -> None:
             fdtd.AddEdges2Grid(
                 dirs="xyz", properties=material, metal_edge_res=mesh_resolution / 2
             )
-        port = fdtd.AddLumpedPort(
-            1, args.port_impedance, port_start.tolist(), port_stop.tolist(),
-            port_direction, 1.0, priority=5,
-            edges2grid={"x": "yz", "y": "xz", "z": "xy"}[port_direction]
+        port_objects = []
+        excitation_port = (
+            0 if args.port_excitation is None else args.port_excitation
         )
-        simulation_kind = "cad_scene"
+        for port_number, port_config in enumerate(ports):
+            port_start = port_config["start"]
+            port_stop = port_config["stop"]
+            port_direction = port_config["axis"]
+            if port_config["type"] == "rect-waveguide":
+                axis_index = "xyz".index(port_direction)
+                transverse = ((axis_index + 1) % 3, (axis_index + 2) % 3)
+                a = abs(port_stop[transverse[0]] - port_start[transverse[0]])
+                b = abs(port_stop[transverse[1]] - port_start[transverse[1]])
+                port_objects.append(
+                    fdtd.AddRectWaveGuidePort(
+                        port_number + 1,
+                        port_start.tolist(),
+                        port_stop.tolist(),
+                        port_direction,
+                        a * 1e-3,
+                        b * 1e-3,
+                        port_config["mode"],
+                        excite=1 if port_number == excitation_port else 0,
+                    )
+                )
+            else:
+                port_objects.append(
+                    fdtd.AddLumpedPort(
+                        port_number + 1,
+                        port_config["impedance"],
+                        port_start.tolist(),
+                        port_stop.tolist(),
+                        port_direction,
+                        excite=1 if port_number == excitation_port else 0,
+                        priority=5,
+                        edges2grid={
+                            "x": "yz", "y": "xz", "z": "xy"
+                        }[port_direction],
+                    )
+                )
+        port = port_objects[0]
+        response_port = port_objects[1] if len(port_objects) > 1 else None
+        simulation_kind = (
+            "cad_scene_multiport" if len(port_objects) > 1 else "cad_scene"
+        )
     else:
         substrate_width = args.substrate_width_mm
         substrate_length = args.substrate_length_mm
@@ -300,9 +611,66 @@ def main() -> None:
     elapsed_s = time.perf_counter() - started
 
     frequencies = np.linspace(f_start_hz, f_stop_hz, args.frequency_points)
+    if args.port_excitation is not None:
+        for configured_port in port_objects:
+            configured_port.CalcPort(str(simulation_path), frequencies)
+        source_port = port_objects[args.port_excitation]
+        response_path = output / "excitation.csv"
+        with response_path.open("w", newline="") as result_file:
+            writer = csv.writer(result_file)
+            headers = ["frequency_hz"]
+            for response_index in range(len(port_objects)):
+                headers.extend((
+                    f"s{response_index + 1}_real",
+                    f"s{response_index + 1}_imag",
+                ))
+            writer.writerow(headers)
+            for frequency_index, frequency in enumerate(frequencies):
+                row = [float(frequency)]
+                for configured_port in port_objects:
+                    value = (
+                        configured_port.uf_ref[frequency_index] /
+                        source_port.uf_inc[frequency_index]
+                    )
+                    row.extend((float(value.real), float(value.imag)))
+                writer.writerow(row)
+        waveform_path = output / "excitation_waveform.csv"
+        with waveform_path.open("w", newline="") as waveform_file:
+            writer = csv.writer(waveform_file)
+            if source_port.__class__.__name__ == "RectWGPort":
+                writer.writerow(("time_s", "port_total_voltage_v"))
+                writer.writerows(
+                    (float(t), float(voltage))
+                    for t, voltage in zip(
+                        source_port.u_time, source_port.ut_tot
+                    )
+                )
+            else:
+                writer.writerow(
+                    ("time_s", "incident_voltage_v", "reflected_voltage_v")
+                )
+                writer.writerows(
+                    (float(t), float(incident), float(reflected))
+                    for t, incident, reflected in zip(
+                        source_port.u_time, source_port.ut_inc,
+                        source_port.ut_ref,
+                    )
+                )
+        return
+
     port.CalcPort(str(simulation_path), frequencies)
     s11 = port.uf_ref / port.uf_inc
-    s11_db = 20 * np.log10(np.maximum(np.abs(s11), np.finfo(float).tiny))
+    s21 = None
+    s21_db = None
+    if response_port is not None:
+        response_port.CalcPort(str(simulation_path), frequencies)
+        s21 = response_port.uf_ref / port.uf_inc
+        s21_db = 20 * np.log10(
+            np.maximum(np.abs(s21), np.finfo(float).tiny)
+        )
+    s11_magnitude = np.abs(s11)
+    s11_db = 20 * np.log10(np.maximum(s11_magnitude, np.finfo(float).tiny))
+    vswr = (1 + s11_magnitude) / np.maximum(1 - s11_magnitude, 1e-12)
     s11_file = output / ("s11_scene.csv" if args.scene else f"s11_{args.engine}.csv")
     touchstone_path = output / (
         "s11_scene.s1p" if args.scene else "s11_antenna.s1p"
@@ -320,21 +688,47 @@ def main() -> None:
     if args.scene:
         with s11_file.open("w", newline="") as result_file:
             writer = csv.writer(result_file)
-            writer.writerow(("frequency_hz", "s11_real", "s11_imag", "s11_db"))
-            writer.writerows(
-                (float(frequency), float(value.real), float(value.imag), float(db))
-                for frequency, value, db in zip(frequencies, s11, s11_db)
-            )
+            headers = [
+                "frequency_hz", "s11_real", "s11_imag", "s11_db", "vswr"
+            ]
+            if s21_db is not None:
+                headers.append("s21_db")
+            writer.writerow(headers)
+            if s21_db is None:
+                writer.writerows(
+                    (float(frequency), float(value.real), float(value.imag),
+                     float(db), float(vswr_value))
+                    for frequency, value, db, vswr_value in zip(
+                        frequencies, s11, s11_db, vswr
+                    )
+                )
+            else:
+                writer.writerows(
+                    (float(frequency), float(value.real), float(value.imag),
+                     float(db), float(vswr_value), float(s21_value_db))
+                    for frequency, value, db, vswr_value, s21_value_db in zip(
+                        frequencies, s11, s11_db, vswr, s21_db
+                    )
+                )
         waveform_path = output / "waveform_scene.csv"
         with waveform_path.open("w", newline="") as waveform_file:
             writer = csv.writer(waveform_file)
-            writer.writerow(("time_s", "incident_voltage_v", "reflected_voltage_v"))
-            writer.writerows(
-                (float(t), float(incident), float(reflected))
-                for t, incident, reflected in zip(
-                    port.u_time, port.ut_inc, port.ut_ref
+            if port1_type == "lumped":
+                writer.writerow(
+                    ("time_s", "incident_voltage_v", "reflected_voltage_v")
                 )
-            )
+                writer.writerows(
+                    (float(t), float(incident), float(reflected))
+                    for t, incident, reflected in zip(
+                        port.u_time, port.ut_inc, port.ut_ref
+                    )
+                )
+            else:
+                writer.writerow(("time_s", "port_1_total_voltage_v"))
+                writer.writerows(
+                    (float(t), float(voltage))
+                    for t, voltage in zip(port.u_time, port.ut_tot)
+                )
 
     if nf2ff is not None:
         antenna_s11_path = output / "s11_antenna.csv"
@@ -421,6 +815,14 @@ def main() -> None:
         "s11_csv": s11_file.name,
         "s11_touchstone": touchstone_path.name,
     }
+    if s21_db is not None:
+        summary.update({
+            "port_count": 2,
+            "port1_type": port1_type,
+            "port1_mode": port1_mode,
+            "s21_in_csv": True,
+            "s21_max_db": float(np.max(s21_db)),
+        })
     if nf2ff is not None:
         summary.update({
             "near_field_z_mm": near_field_z,

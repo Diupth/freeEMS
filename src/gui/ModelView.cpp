@@ -1,6 +1,7 @@
 #include "ModelView.hpp"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <QColor>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
@@ -38,14 +39,8 @@ void ModelView::setProjectActive(bool active) {
     update();
 }
 
-void ModelView::setLumpedPort(double startX, double startY, double startZ,
-                              double stopX, double stopY, double stopZ) {
-    portStartX_ = startX;
-    portStartY_ = startY;
-    portStartZ_ = startZ;
-    portStopX_ = stopX;
-    portStopY_ = stopY;
-    portStopZ_ = stopZ;
+void ModelView::setPorts(const std::vector<rfsim::OemPort>& ports) {
+    ports_ = ports;
     update();
 }
 
@@ -134,6 +129,14 @@ double ModelView::sceneScale() const {
             maxZ = std::max(maxZ, object.z + object.height);
         }
     }
+    for (const auto& port : ports_) {
+        minX = std::min({minX, port.startXmm, port.stopXmm});
+        maxX = std::max({maxX, port.startXmm, port.stopXmm});
+        minY = std::min({minY, port.startYmm, port.stopYmm});
+        maxY = std::max({maxY, port.startYmm, port.stopYmm});
+        minZ = std::min({minZ, port.startZmm, port.stopZmm});
+        maxZ = std::max({maxZ, port.startZmm, port.stopZmm});
+    }
     const double span = std::max({maxX - minX, maxY - minY, maxZ - minZ, 1.0});
     return std::min(width() * 0.72, height() * 0.72) / (span * 1.8);
 }
@@ -156,6 +159,14 @@ QPointF ModelView::screenToWorld(const QPointF& point) const {
             maxY = std::max(maxY, object.y + dy);
             maxZ = std::max(maxZ, object.z + object.height);
         }
+    }
+    for (const auto& port : ports_) {
+        minX = std::min({minX, port.startXmm, port.stopXmm});
+        maxX = std::max({maxX, port.startXmm, port.stopXmm});
+        minY = std::min({minY, port.startYmm, port.stopYmm});
+        maxY = std::max({maxY, port.startYmm, port.stopYmm});
+        minZ = std::min({minZ, port.startZmm, port.stopZmm});
+        maxZ = std::max({maxZ, port.startZmm, port.stopZmm});
     }
     return {(point.x() - width() * 0.5) / sceneScale() + (minX + maxX) * 0.5,
             (height() * 0.53 - point.y()) / sceneScale() + (minY + maxY) * 0.5};
@@ -186,6 +197,14 @@ void ModelView::paintEvent(QPaintEvent*) {
             maxY = std::max(maxY, object.y + dy);
             maxZ = std::max(maxZ, object.z + object.height);
         }
+    }
+    for (const auto& port : ports_) {
+        minX = std::min({minX, port.startXmm, port.stopXmm});
+        maxX = std::max({maxX, port.startXmm, port.stopXmm});
+        minY = std::min({minY, port.startYmm, port.stopYmm});
+        maxY = std::max({maxY, port.startYmm, port.stopYmm});
+        minZ = std::min({minZ, port.startZmm, port.stopZmm});
+        maxZ = std::max({maxZ, port.startZmm, port.stopZmm});
     }
 
     const double scale = sceneScale();
@@ -362,15 +381,72 @@ void ModelView::paintEvent(QPaintEvent*) {
                          QString::fromStdString(object.name));
     }
 
-    if (!objects_.empty()) {
-        const QPointF start = point(portStartX_, portStartY_, portStartZ_);
-        const QPointF stop = point(portStopX_, portStopY_, portStopZ_);
-        painter.setPen(QPen(QColor(192, 67, 45), 3));
-        painter.drawLine(start, stop);
-        painter.drawLine(start + QPointF(-6, -6), start + QPointF(6, 6));
-        painter.drawLine(start + QPointF(-6, 6), start + QPointF(6, -6));
-        painter.setPen(QColor(128, 45, 37));
-        painter.drawText(stop + QPointF(8, -8), QStringLiteral("Lumped Port"));
+    static const std::array<QColor, 8> portColors = {{
+        QColor(192, 67, 45), QColor(37, 116, 190),
+        QColor(45, 142, 87), QColor(155, 87, 173),
+        QColor(205, 132, 35), QColor(35, 145, 153),
+        QColor(190, 75, 120), QColor(93, 105, 117)
+    }};
+    for (size_t index = 0; index < ports_.size(); ++index) {
+        const auto& port = ports_[index];
+        const QColor color = portColors[index % portColors.size()];
+        const double start[3] = {
+            port.startXmm, port.startYmm, port.startZmm
+        };
+        const double stop[3] = {
+            port.stopXmm, port.stopYmm, port.stopZmm
+        };
+        const int axis = QStringLiteral("xyz").indexOf(port.axis);
+        if (axis < 0) continue;
+
+        if (port.type == QStringLiteral("rect-waveguide")) {
+            const int transverseA = axis == 0 ? 1 : 0;
+            const int transverseB = axis == 2 ? 1 : 2;
+            const double a0 = std::min(start[transverseA], stop[transverseA]);
+            const double a1 = std::max(start[transverseA], stop[transverseA]);
+            const double b0 = std::min(start[transverseB], stop[transverseB]);
+            const double b1 = std::max(start[transverseB], stop[transverseB]);
+            const double plane = (start[axis] + stop[axis]) * 0.5;
+            const auto corner = [&](double a, double b) {
+                double coordinates[3] = {0.0, 0.0, 0.0};
+                coordinates[axis] = plane;
+                coordinates[transverseA] = a;
+                coordinates[transverseB] = b;
+                return point(coordinates[0], coordinates[1], coordinates[2]);
+            };
+            const QPolygonF face({
+                corner(a0, b0), corner(a1, b0),
+                corner(a1, b1), corner(a0, b1)
+            });
+            painter.setPen(QPen(color, 2));
+            painter.setBrush(QColor(color.red(), color.green(), color.blue(), 65));
+            painter.drawPolygon(face);
+            QPointF center;
+            for (const QPointF& vertex : face) center += vertex;
+            center /= 4.0;
+            painter.setPen(color.darker(125));
+            painter.drawText(
+                center + QPointF(8, -8 - static_cast<qreal>(index % 4) * 14),
+                QStringLiteral("Port %1 — %2")
+                    .arg(index + 1)
+                    .arg(port.mode));
+        } else {
+            const QPointF startPoint = point(start[0], start[1], start[2]);
+            const QPointF stopPoint = point(stop[0], stop[1], stop[2]);
+            painter.setPen(QPen(color, 3));
+            painter.drawLine(startPoint, stopPoint);
+            painter.drawLine(startPoint + QPointF(-6, -6),
+                             startPoint + QPointF(6, 6));
+            painter.drawLine(startPoint + QPointF(-6, 6),
+                             startPoint + QPointF(6, -6));
+            painter.setBrush(color);
+            painter.drawEllipse(stopPoint, 3.5, 3.5);
+            painter.setPen(color.darker(125));
+            painter.drawText(
+                (startPoint + stopPoint) * 0.5 +
+                    QPointF(8, -8 - static_cast<qreal>(index % 4) * 14),
+                QStringLiteral("Port %1").arg(index + 1));
+        }
     }
     if (curveDrawing_) {
         QPolygonF curve;

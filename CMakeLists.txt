@@ -91,7 +91,6 @@ if(BUILD_TESTING)
             NAME gui_waveguide_oem_run_smoke
             COMMAND rf_sim_gui --smoke-open-project-run
                     "${CMAKE_CURRENT_SOURCE_DIR}/waveguide.oem"
-                    "${CMAKE_BINARY_DIR}/artifacts/waveguide-oem-run-smoke"
         )
         set_tests_properties(
             gui_waveguide_oem_run_smoke

@@ -11,7 +11,20 @@
 
 namespace rfsim {
 
-inline constexpr char OemProjectFormatVersion[] = "0.0.1";
+inline constexpr char OemProjectFormatVersion[] = "0.0.2";
+
+struct OemPort {
+    QString type = QStringLiteral("lumped");
+    QString mode;
+    QString axis = QStringLiteral("z");
+    double startXmm = 0.0;
+    double startYmm = 0.0;
+    double startZmm = 0.0;
+    double stopXmm = 0.0;
+    double stopYmm = 0.0;
+    double stopZmm = 1.0;
+    double impedanceOhm = 50.0;
+};
 
 struct OemSimulationSettings {
     double frequencyStartGHz = 1.0;
@@ -20,14 +33,7 @@ struct OemSimulationSettings {
     int meshDivisions = 30;
     int maximumTimesteps = 20000;
     QString boundary = QStringLiteral("MUR");
-    QString portAxis = QStringLiteral("z");
-    double portStartXmm = 0.0;
-    double portStartYmm = 0.0;
-    double portStartZmm = 0.0;
-    double portStopXmm = 0.0;
-    double portStopYmm = 0.0;
-    double portStopZmm = 1.0;
-    double portImpedanceOhm = 50.0;
+    std::vector<OemPort> ports;
     QString engine = QStringLiteral("cpu");
 };
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rfsim/Geometry.hpp"
+#include "OemProject.hpp"
 
 #include <QPoint>
 #include <QPointF>
@@ -20,8 +20,8 @@ public:
     void setObjects(const std::vector<rfsim::SolidObject>& objects);
     void setSelectedIndex(int index);
     void setProjectActive(bool active);
-    void setLumpedPort(double startX, double startY, double startZ,
-                       double stopX, double stopY, double stopZ);
+    void setPorts(const std::vector<rfsim::OemPort>& ports);
+    std::size_t portCount() const { return ports_.size(); }
     void setDrawMode(
         std::function<void(double, double, double, double)> rectangleHandler);
     void setCurveDrawMode(
@@ -46,18 +46,13 @@ private:
     void finishCurveDrawing();
 
     std::vector<rfsim::SolidObject> objects_;
+    std::vector<rfsim::OemPort> ports_;
     QPoint lastMousePosition_;
     int selectedIndex_ = -1;
     bool projectActive_ = false;
     bool topView_ = false;
     bool drawing_ = false;
     bool curveDrawing_ = false;
-    double portStartX_ = 0.0;
-    double portStartY_ = 0.0;
-    double portStartZ_ = 0.0;
-    double portStopX_ = 0.0;
-    double portStopY_ = 0.0;
-    double portStopZ_ = 1.0;
     double curveDrawZmm_ = 0.0;
     QPointF drawStart_;
     QPointF drawCurrent_;

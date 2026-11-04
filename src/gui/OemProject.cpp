@@ -18,6 +18,8 @@
 namespace rfsim {
 namespace {
 
+constexpr char LegacyOemProjectFormatVersion[] = "0.0.1";
+
 QString number(double value) {
     return QString::number(value, 'g', 17);
 }
@@ -39,6 +41,12 @@ QString requiredAttribute(const QXmlStreamAttributes& attributes,
     return value.toString();
 }
 
+QString optionalAttribute(const QXmlStreamAttributes& attributes,
+                          const QString& name, const QString& fallback) {
+    return attributes.hasAttribute(name) ? attributes.value(name).toString()
+                                        : fallback;
+}
+
 double numberAttribute(const QXmlStreamAttributes& attributes,
                        const QString& name) {
     bool ok = false;
@@ -47,6 +55,25 @@ double numberAttribute(const QXmlStreamAttributes& attributes,
         invalid(QStringLiteral("Invalid numeric project attribute: %1").arg(name));
     }
     return value;
+}
+
+double optionalNumberAttribute(const QXmlStreamAttributes& attributes,
+                              const QString& name, double fallback) {
+    return attributes.hasAttribute(name) ? numberAttribute(attributes, name)
+                                         : fallback;
+}
+
+bool optionalBooleanAttribute(const QXmlStreamAttributes& attributes,
+                              const QString& name, bool fallback) {
+    if (!attributes.hasAttribute(name)) return fallback;
+    const QString value = attributes.value(name).toString();
+    if (value == QStringLiteral("true") || value == QStringLiteral("1")) {
+        return true;
+    }
+    if (value == QStringLiteral("false") || value == QStringLiteral("0")) {
+        return false;
+    }
+    invalid(QStringLiteral("Invalid boolean project attribute: %1").arg(name));
 }
 
 int integerAttribute(const QXmlStreamAttributes& attributes,
@@ -204,16 +231,24 @@ void writeSimulation(QXmlStreamWriter& writer,
     writer.writeAttribute(QStringLiteral("maximum-timesteps"),
                           QString::number(settings.maximumTimesteps));
     writer.writeAttribute(QStringLiteral("boundary"), settings.boundary);
-    writer.writeAttribute(QStringLiteral("port-axis"), settings.portAxis);
-    writeNumber(writer, QStringLiteral("port-start-x-mm"), settings.portStartXmm);
-    writeNumber(writer, QStringLiteral("port-start-y-mm"), settings.portStartYmm);
-    writeNumber(writer, QStringLiteral("port-start-z-mm"), settings.portStartZmm);
-    writeNumber(writer, QStringLiteral("port-stop-x-mm"), settings.portStopXmm);
-    writeNumber(writer, QStringLiteral("port-stop-y-mm"), settings.portStopYmm);
-    writeNumber(writer, QStringLiteral("port-stop-z-mm"), settings.portStopZmm);
-    writeNumber(writer, QStringLiteral("port-impedance-ohm"),
-                settings.portImpedanceOhm);
     writer.writeAttribute(QStringLiteral("engine"), settings.engine);
+    for (size_t index = 0; index < settings.ports.size(); ++index) {
+        const auto& port = settings.ports[index];
+        writer.writeStartElement(QStringLiteral("port"));
+        writer.writeAttribute(QStringLiteral("number"),
+                              QString::number(index + 1));
+        writer.writeAttribute(QStringLiteral("type"), port.type);
+        writer.writeAttribute(QStringLiteral("mode"), port.mode);
+        writer.writeAttribute(QStringLiteral("axis"), port.axis);
+        writeNumber(writer, QStringLiteral("start-x-mm"), port.startXmm);
+        writeNumber(writer, QStringLiteral("start-y-mm"), port.startYmm);
+        writeNumber(writer, QStringLiteral("start-z-mm"), port.startZmm);
+        writeNumber(writer, QStringLiteral("stop-x-mm"), port.stopXmm);
+        writeNumber(writer, QStringLiteral("stop-y-mm"), port.stopYmm);
+        writeNumber(writer, QStringLiteral("stop-z-mm"), port.stopZmm);
+        writeNumber(writer, QStringLiteral("impedance-ohm"), port.impedanceOhm);
+        writer.writeEndElement();
+    }
     writer.writeEndElement();
 }
 
@@ -430,23 +465,95 @@ void parseSimulation(QXmlStreamReader& reader,
     settings->maximumTimesteps =
         integerAttribute(attributes, QStringLiteral("maximum-timesteps"));
     settings->boundary = requiredAttribute(attributes, QStringLiteral("boundary"));
-    settings->portAxis = requiredAttribute(attributes, QStringLiteral("port-axis"));
-    settings->portStartXmm =
-        numberAttribute(attributes, QStringLiteral("port-start-x-mm"));
-    settings->portStartYmm =
-        numberAttribute(attributes, QStringLiteral("port-start-y-mm"));
-    settings->portStartZmm =
-        numberAttribute(attributes, QStringLiteral("port-start-z-mm"));
-    settings->portStopXmm =
-        numberAttribute(attributes, QStringLiteral("port-stop-x-mm"));
-    settings->portStopYmm =
-        numberAttribute(attributes, QStringLiteral("port-stop-y-mm"));
-    settings->portStopZmm =
-        numberAttribute(attributes, QStringLiteral("port-stop-z-mm"));
-    settings->portImpedanceOhm =
-        numberAttribute(attributes, QStringLiteral("port-impedance-ohm"));
     settings->engine = requiredAttribute(attributes, QStringLiteral("engine"));
-    reader.skipCurrentElement();
+    settings->ports.clear();
+
+    const bool hasLegacyPort =
+        attributes.hasAttribute(QStringLiteral("port-start-x-mm"));
+    OemPort legacyPort;
+    if (hasLegacyPort) {
+        legacyPort.type = optionalAttribute(
+            attributes, QStringLiteral("port-type"), QStringLiteral("lumped"));
+        legacyPort.mode = optionalAttribute(
+            attributes, QStringLiteral("port-mode"), QString());
+        legacyPort.axis = requiredAttribute(
+            attributes, QStringLiteral("port-axis"));
+        legacyPort.startXmm =
+            numberAttribute(attributes, QStringLiteral("port-start-x-mm"));
+        legacyPort.startYmm =
+            numberAttribute(attributes, QStringLiteral("port-start-y-mm"));
+        legacyPort.startZmm =
+            numberAttribute(attributes, QStringLiteral("port-start-z-mm"));
+        legacyPort.stopXmm =
+            numberAttribute(attributes, QStringLiteral("port-stop-x-mm"));
+        legacyPort.stopYmm =
+            numberAttribute(attributes, QStringLiteral("port-stop-y-mm"));
+        legacyPort.stopZmm =
+            numberAttribute(attributes, QStringLiteral("port-stop-z-mm"));
+        legacyPort.impedanceOhm =
+            numberAttribute(attributes, QStringLiteral("port-impedance-ohm"));
+    }
+
+    std::vector<OemPort> childPorts;
+    while (reader.readNextStartElement()) {
+        if (reader.name() != QStringLiteral("port")) {
+            invalid(QStringLiteral("Unknown simulation element: %1")
+                        .arg(reader.name().toString()));
+        }
+        const auto portAttributes = reader.attributes();
+        OemPort port;
+        port.type = requiredAttribute(portAttributes, QStringLiteral("type"));
+        port.mode = optionalAttribute(
+            portAttributes, QStringLiteral("mode"), QString());
+        port.axis = requiredAttribute(portAttributes, QStringLiteral("axis"));
+        port.startXmm =
+            numberAttribute(portAttributes, QStringLiteral("start-x-mm"));
+        port.startYmm =
+            numberAttribute(portAttributes, QStringLiteral("start-y-mm"));
+        port.startZmm =
+            numberAttribute(portAttributes, QStringLiteral("start-z-mm"));
+        port.stopXmm =
+            numberAttribute(portAttributes, QStringLiteral("stop-x-mm"));
+        port.stopYmm =
+            numberAttribute(portAttributes, QStringLiteral("stop-y-mm"));
+        port.stopZmm =
+            numberAttribute(portAttributes, QStringLiteral("stop-z-mm"));
+        port.impedanceOhm =
+            numberAttribute(portAttributes, QStringLiteral("impedance-ohm"));
+        childPorts.push_back(std::move(port));
+        reader.skipCurrentElement();
+    }
+    if (!childPorts.empty()) {
+        settings->ports = std::move(childPorts);
+    } else if (hasLegacyPort) {
+        settings->ports.push_back(legacyPort);
+        const bool hasLegacyPort2 = optionalBooleanAttribute(
+            attributes, QStringLiteral("port2-enabled"), false);
+        if (hasLegacyPort2) {
+            OemPort port2;
+            port2.type = optionalAttribute(
+                attributes, QStringLiteral("port2-type"), legacyPort.type);
+            port2.mode = optionalAttribute(
+                attributes, QStringLiteral("port2-mode"), legacyPort.mode);
+            port2.axis = optionalAttribute(
+                attributes, QStringLiteral("port2-axis"), QStringLiteral("z"));
+            port2.startXmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-start-x-mm"), 0.0);
+            port2.startYmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-start-y-mm"), 0.0);
+            port2.startZmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-start-z-mm"), 0.0);
+            port2.stopXmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-stop-x-mm"), 0.0);
+            port2.stopYmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-stop-y-mm"), 0.0);
+            port2.stopZmm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-stop-z-mm"), 1.0);
+            port2.impedanceOhm = optionalNumberAttribute(
+                attributes, QStringLiteral("port2-impedance-ohm"), 50.0);
+            settings->ports.push_back(std::move(port2));
+        }
+    }
 }
 
 void parseDesign(QXmlStreamReader& reader, OemProjectDocument* project,
@@ -834,33 +941,57 @@ void validateSimulation(const OemSimulationSettings& settings) {
         settings.frequencyPoints < 2 || settings.frequencyPoints > 10001 ||
         settings.meshDivisions < 8 || settings.meshDivisions > 80 ||
         settings.maximumTimesteps < 1000 || settings.maximumTimesteps > 10000000 ||
-        (settings.portAxis != QStringLiteral("x") &&
-         settings.portAxis != QStringLiteral("y") &&
-         settings.portAxis != QStringLiteral("z")) ||
-        !inRange(settings.portStartXmm, -1000, 1000) ||
-        !inRange(settings.portStartYmm, -1000, 1000) ||
-        !inRange(settings.portStartZmm, -1000, 1000) ||
-        !inRange(settings.portStopXmm, -1000, 1000) ||
-        !inRange(settings.portStopYmm, -1000, 1000) ||
-        !inRange(settings.portStopZmm, -1000, 1000) ||
-        (settings.portAxis == QStringLiteral("x") &&
-         (settings.portStartXmm >= settings.portStopXmm ||
-          settings.portStartYmm != settings.portStopYmm ||
-          settings.portStartZmm != settings.portStopZmm)) ||
-        (settings.portAxis == QStringLiteral("y") &&
-         (settings.portStartYmm >= settings.portStopYmm ||
-          settings.portStartXmm != settings.portStopXmm ||
-          settings.portStartZmm != settings.portStopZmm)) ||
-        (settings.portAxis == QStringLiteral("z") &&
-         (settings.portStartZmm >= settings.portStopZmm ||
-          settings.portStartXmm != settings.portStopXmm ||
-          settings.portStartYmm != settings.portStopYmm)) ||
-        !inRange(settings.portImpedanceOhm, 1, 10000) ||
+        settings.ports.size() > 128 ||
         (settings.boundary != QStringLiteral("MUR") &&
          settings.boundary != QStringLiteral("PML_8")) ||
         (settings.engine != QStringLiteral("cpu") &&
          settings.engine != QStringLiteral("gpu"))) {
         invalid(QStringLiteral("Project contains invalid simulation or model settings."));
+    }
+    for (size_t portIndex = 0; portIndex < settings.ports.size(); ++portIndex) {
+        const auto& port = settings.ports[portIndex];
+        const int axisIndex = QStringLiteral("xyz").indexOf(port.axis);
+        const double start[3] = {
+            port.startXmm, port.startYmm, port.startZmm
+        };
+        const double stop[3] = {
+            port.stopXmm, port.stopYmm, port.stopZmm
+        };
+        if ((port.type != QStringLiteral("lumped") &&
+             port.type != QStringLiteral("rect-waveguide")) ||
+            axisIndex < 0 ||
+            !inRange(port.startXmm, -1000, 1000) ||
+            !inRange(port.startYmm, -1000, 1000) ||
+            !inRange(port.startZmm, -1000, 1000) ||
+            !inRange(port.stopXmm, -1000, 1000) ||
+            !inRange(port.stopYmm, -1000, 1000) ||
+            !inRange(port.stopZmm, -1000, 1000) ||
+            !inRange(port.impedanceOhm, 1, 10000)) {
+            invalid(QStringLiteral("Project contains invalid settings for port %1.")
+                        .arg(portIndex + 1));
+        }
+        for (int axis = 0; axis < 3; ++axis) {
+            const bool validAxisSpan = axis == axisIndex
+                ? (port.type == QStringLiteral("lumped")
+                       ? start[axis] < stop[axis]
+                       : start[axis] != stop[axis])
+                : (port.type == QStringLiteral("lumped")
+                       ? start[axis] == stop[axis]
+                       : start[axis] < stop[axis]);
+            if (!validAxisSpan) {
+                invalid(QStringLiteral(
+                            "Project contains invalid coordinates for port %1.")
+                            .arg(portIndex + 1));
+            }
+        }
+        if (port.type == QStringLiteral("rect-waveguide") &&
+            port.mode != QStringLiteral("TE10") &&
+            port.mode != QStringLiteral("TE20") &&
+            port.mode != QStringLiteral("TE01") &&
+            port.mode != QStringLiteral("TE11")) {
+            invalid(QStringLiteral("Project contains an invalid mode for port %1.")
+                        .arg(portIndex + 1));
+        }
     }
 }
 
@@ -1070,8 +1201,12 @@ bool readOemProject(const QString& path, OemProjectDocument* project,
             reader.name() != QStringLiteral("oem-project")) {
             invalid(QStringLiteral("Invalid OEM project XML root element."));
         }
-        if (requiredAttribute(reader.attributes(), QStringLiteral("format-version")) !=
-            QString::fromLatin1(OemProjectFormatVersion)) {
+        const QString formatVersion =
+            requiredAttribute(reader.attributes(),
+                              QStringLiteral("format-version"));
+        if (formatVersion != QString::fromLatin1(OemProjectFormatVersion) &&
+            formatVersion != QString::fromLatin1(
+                                 LegacyOemProjectFormatVersion)) {
             invalid(QStringLiteral("Unsupported OEM project format version."));
         }
 
